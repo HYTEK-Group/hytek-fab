@@ -7,7 +7,7 @@ import { AppShell } from '@/components/app-shell'
 import { supabase } from '@/lib/supabase'
 import type { FabJob, FabTask, FabMark, FabTimeEntry } from '@/lib/types'
 
-type Tab = 'tasks' | 'marks' | 'drawings' | 'treatment' | 'subs' | 'timelog'
+type Tab = 'tasks' | 'marks' | 'drawings' | 'packages' | 'qc' | 'dispatch' | 'timelog'
 
 interface JobDetail extends FabJob {
   task_count: number
@@ -160,12 +160,12 @@ function MarksTab({ jobId, token }: { jobId: string; token: string }) {
 
   const statusColor = (s: FabMark['status']) => {
     const map: Record<FabMark['status'], string> = {
-      not_started: '#555', in_progress: '#FFCB05', done: '#97C459', at_treatment: '#85B7EB', returned: '#9B7FE0'
+      not_started: '#555', in_progress: '#FFCB05', done: '#97C459', at_contractor: '#85B7EB', returned: '#9B7FE0', qc_passed: '#63D297'
     }
     return map[s] ?? '#555'
   }
 
-  const done = marks.filter(m => m.status === 'done' || m.status === 'returned').length
+  const done = marks.filter(m => m.status === 'done' || m.status === 'returned' || m.status === 'qc_passed').length
 
   return (
     <div>
@@ -181,7 +181,7 @@ function MarksTab({ jobId, token }: { jobId: string; token: string }) {
       {selected.size > 0 && (
         <div className="rounded-xl p-2 mb-3 flex gap-2 items-center" style={{ background: '#232326', border: '0.5px solid #2a2a2a' }}>
           <span className="text-xs mr-2" style={{ color: '#777' }}>{selected.size} selected</span>
-          {(['in_progress', 'done', 'at_treatment'] as FabMark['status'][]).map(s => (
+          {(['in_progress', 'done', 'at_contractor'] as FabMark['status'][]).map(s => (
             <button key={s} onClick={() => bulkStatus(s)} className="text-xs px-3 py-1 rounded-full"
               style={{ background: 'transparent', border: `0.5px solid ${statusColor(s)}`, color: statusColor(s) }}>
               → {s.replace('_', ' ')}
@@ -270,22 +270,310 @@ function DrawingsTab({ jobId, token }: { jobId: string; token: string }) {
   )
 }
 
-// ── Treatment ─────────────────────────────────────────────────────────────────
-function TreatmentTab() {
+// Shared small chip-button style for the new tabs.
+const chip: React.CSSProperties = {
+  background: 'transparent', border: '0.5px solid #555', color: '#aaa',
+  borderRadius: 999, padding: '4px 10px', fontSize: 12, cursor: 'pointer',
+}
+
+// ── Packages (contractor / treatment) ─────────────────────────────────────────
+interface Pkg {
+  id: string
+  contractor_name: string
+  scope_note: string | null
+  status: string
+  package_type: string
+  treatment_type: string | null
+  expected_return_date: string | null
+  fab_marks?: { id: string }[]
+}
+
+function PackageMarkPicker({ free, onAdd }: { free: FabMark[]; onAdd: (ids: string[]) => void }) {
+  const [sel, setSel] = useState<string[]>([])
   return (
-    <div className="rounded-xl p-6 text-center" style={{ background: '#232326', border: '0.5px solid #2a2a2a' }}>
-      <p className="text-sm mb-1" style={{ color: '#fff' }}>Treatment batches</p>
-      <p className="text-xs" style={{ color: '#555' }}>Use Mark tab to set marks to "At treatment" status. Treatment batch tracking coming soon.</p>
+    <div className="flex gap-2 items-start">
+      <select multiple value={sel} onChange={e => setSel(Array.from(e.target.selectedOptions, o => o.value))}
+        className="text-xs flex-1" style={{ minHeight: 70, background: '#1a1a1c', color: '#ccc', border: '0.5px solid #2a2a2a', borderRadius: 6 }}>
+        {free.map(m => <option key={m.id} value={m.id}>{m.mark_id}{m.section ? ` · ${m.section}` : ''}</option>)}
+      </select>
+      <button onClick={() => { onAdd(sel); setSel([]) }} disabled={!sel.length} style={{ ...chip, opacity: sel.length ? 1 : .5 }}>Add</button>
     </div>
   )
 }
 
-// ── Sub packages ─────────────────────────────────────────────────────────────
-function SubsTab() {
+function PackagesTab({ jobId, token }: { jobId: string; token: string }) {
+  const [packages, setPackages] = useState<Pkg[]>([])
+  const [marks, setMarks] = useState<FabMark[]>([])
+  const [form, setForm] = useState({ contractor_name: '', package_type: 'fabrication', treatment_type: '', scope_note: '' })
+  const [creating, setCreating] = useState(false)
+
+  const authJson = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+
+  const load = useCallback(async () => {
+    const [pRes, mRes] = await Promise.all([
+      fetch(`/api/fab/jobs/${jobId}/contractor-packages`, { headers: { Authorization: `Bearer ${token}` } }),
+      fetch(`/api/fab/jobs/${jobId}/marks`, { headers: { Authorization: `Bearer ${token}` } }),
+    ])
+    if (pRes.ok) setPackages((await pRes.json()).packages ?? [])
+    if (mRes.ok) setMarks((await mRes.json()).marks ?? [])
+  }, [jobId, token])
+
+  useEffect(() => { load() }, [load])
+
+  async function create() {
+    if (!form.contractor_name.trim()) return
+    setCreating(true)
+    await fetch(`/api/fab/jobs/${jobId}/contractor-packages`, {
+      method: 'POST', headers: authJson,
+      body: JSON.stringify({
+        contractor_name: form.contractor_name.trim(),
+        package_type: form.package_type,
+        treatment_type: form.package_type === 'treatment' ? (form.treatment_type || null) : null,
+        scope_note: form.scope_note.trim() || null,
+      }),
+    })
+    setForm({ contractor_name: '', package_type: 'fabrication', treatment_type: '', scope_note: '' })
+    setCreating(false)
+    load()
+  }
+
+  async function setStatus(pkgId: string, status: string) {
+    await fetch(`/api/fab/contractor-packages/${pkgId}`, { method: 'PATCH', headers: authJson, body: JSON.stringify({ status }) })
+    load()
+  }
+
+  async function logCall(pkgId: string) {
+    const note = prompt('What did they say?')
+    if (!note) return
+    const pct = prompt('Reported % (optional)')
+    await fetch(`/api/fab/contractor-packages/${pkgId}/updates`, {
+      method: 'POST', headers: authJson,
+      body: JSON.stringify({ note, reported_pct: pct ? Number(pct) : null }),
+    })
+    load()
+  }
+
+  async function assignMarks(pkgId: string, add: string[]) {
+    if (!add.length) return
+    await fetch(`/api/fab/contractor-packages/${pkgId}/marks`, { method: 'POST', headers: authJson, body: JSON.stringify({ add }) })
+    load()
+  }
+  async function removeMark(pkgId: string, markId: string) {
+    await fetch(`/api/fab/contractor-packages/${pkgId}/marks`, { method: 'POST', headers: authJson, body: JSON.stringify({ remove: [markId] }) })
+    load()
+  }
+
+  // Free marks: not in any package, in a state eligible to send out.
+  const free = marks.filter(m => !m.contractor_package_id && ['not_started', 'done', 'qc_passed'].includes(m.status))
+
   return (
-    <div className="rounded-xl p-6 text-center" style={{ background: '#232326', border: '0.5px solid #2a2a2a' }}>
-      <p className="text-sm mb-1" style={{ color: '#fff' }}>Sub packages</p>
-      <p className="text-xs" style={{ color: '#555' }}>External sub-contractor packages. Coming soon.</p>
+    <div>
+      <div className="rounded-xl p-3 mb-3" style={{ background: '#232326', border: '0.5px solid #2a2a2a' }}>
+        <p className="text-xs mb-2" style={{ color: '#555' }}>New contractor / treatment package</p>
+        <div className="grid grid-cols-2 gap-2 mb-2">
+          <input placeholder="Contractor name" value={form.contractor_name} onChange={e => setForm(f => ({ ...f, contractor_name: e.target.value }))} />
+          <select value={form.package_type} onChange={e => setForm(f => ({ ...f, package_type: e.target.value }))}>
+            <option value="fabrication">Fabrication / CNC</option>
+            <option value="treatment">Treatment</option>
+            <option value="other">Other</option>
+          </select>
+          {form.package_type === 'treatment' && (
+            <select value={form.treatment_type} onChange={e => setForm(f => ({ ...f, treatment_type: e.target.value }))}>
+              <option value="">Treatment type…</option>
+              <option value="hdg">HDG</option>
+              <option value="etch_primer">Etch primer</option>
+              <option value="powder_coat">Powder coat</option>
+              <option value="two_pack">Two-pack</option>
+            </select>
+          )}
+          <input placeholder="Scope (e.g. CNC base plates)" value={form.scope_note} onChange={e => setForm(f => ({ ...f, scope_note: e.target.value }))} />
+        </div>
+        <button onClick={create} disabled={creating || !form.contractor_name.trim()} className="w-full rounded-lg text-sm font-medium"
+          style={{ background: '#FFCB05', color: '#231F20', padding: '8px', border: 'none', opacity: creating || !form.contractor_name.trim() ? .5 : 1 }}>
+          Create package
+        </button>
+      </div>
+
+      {packages.length === 0 && <p className="text-sm text-center py-6" style={{ color: '#555' }}>No packages yet.</p>}
+
+      <div className="flex flex-col gap-2">
+        {packages.map(p => {
+          const mine = marks.filter(m => m.contractor_package_id === p.id)
+          return (
+            <div key={p.id} className="rounded-xl p-3" style={{ background: '#232326', border: '0.5px solid #2a2a2a' }}>
+              <div className="flex justify-between items-start gap-2">
+                <div>
+                  <p className="text-sm font-medium" style={{ color: '#fff' }}>{p.contractor_name}{p.scope_note ? ` — ${p.scope_note}` : ''}</p>
+                  <p className="text-xs" style={{ color: '#555' }}>{mine.length} marks · {p.package_type}{p.treatment_type ? ` / ${p.treatment_type}` : ''}</p>
+                </div>
+                <span className="text-xs px-2 py-0.5 rounded-full" style={{ border: '0.5px solid #FFCB05', color: '#FFCB05' }}>{p.status}</span>
+              </div>
+              <div className="flex gap-2 mt-2 flex-wrap">
+                {p.status === 'pending' && <button onClick={() => setStatus(p.id, 'sent')} style={chip}>Mark sent</button>}
+                {(p.status === 'sent' || p.status === 'in_progress') && <button onClick={() => setStatus(p.id, 'returned')} style={chip}>Mark returned</button>}
+                <button onClick={() => logCall(p.id)} style={chip}>Log call</button>
+              </div>
+              <details className="mt-2">
+                <summary className="text-xs" style={{ color: '#777', cursor: 'pointer' }}>Assign marks ({mine.length})</summary>
+                <div className="mt-2">
+                  <PackageMarkPicker free={free} onAdd={(ids) => assignMarks(p.id, ids)} />
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    {mine.map(m => (
+                      <span key={m.id} className="text-xs px-2 py-0.5 rounded-full flex items-center gap-1" style={{ border: '0.5px solid #2a2a2a', color: '#888' }}>
+                        {m.mark_id} ({m.status})
+                        <button onClick={() => removeMark(p.id, m.id)} style={{ background: 'none', border: 'none', color: '#9B7FE0', cursor: 'pointer', padding: 0 }}>✕</button>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </details>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// ── QC ─────────────────────────────────────────────────────────────────────────
+function QCTab({ jobId, token }: { jobId: string; token: string }) {
+  const [marks, setMarks] = useState<FabMark[]>([])
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const authJson = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+
+  const load = useCallback(async () => {
+    const res = await fetch(`/api/fab/jobs/${jobId}/marks`, { headers: { Authorization: `Bearer ${token}` } })
+    if (res.ok) setMarks((await res.json()).marks ?? [])
+  }, [jobId, token])
+  useEffect(() => { load() }, [load])
+
+  const pending = marks.filter(m => m.status === 'done' || m.status === 'returned')
+  const toggle = (id: string) => setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
+
+  async function approve() {
+    if (!selected.size) return
+    await fetch(`/api/fab/jobs/${jobId}/qc`, { method: 'POST', headers: authJson, body: JSON.stringify({ mark_ids: Array.from(selected), result: 'pass' }) })
+    setSelected(new Set()); load()
+  }
+  async function reject(markId: string) {
+    const defect = prompt('Defect description (required)')
+    if (!defect) return
+    const rt = prompt('Rework type: inhouse or contractor', 'inhouse')
+    await fetch(`/api/fab/jobs/${jobId}/qc`, {
+      method: 'POST', headers: authJson,
+      body: JSON.stringify({ mark_ids: [markId], result: 'fail', defect_note: defect, rework_type: rt === 'contractor' ? 'contractor' : 'inhouse' }),
+    })
+    load()
+  }
+
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-3">
+        <span className="text-xs" style={{ color: '#777' }}>{pending.length} awaiting QC</span>
+        <button onClick={approve} disabled={!selected.size} className="text-xs px-3 py-1.5 rounded-lg font-medium"
+          style={{ background: selected.size ? '#97C459' : '#1e1e21', color: selected.size ? '#fff' : '#555', border: 'none' }}>
+          Approve selected ({selected.size})
+        </button>
+      </div>
+      {pending.length === 0 && <p className="text-sm text-center py-6" style={{ color: '#555' }}>Nothing awaiting QC.</p>}
+      <div className="flex flex-col gap-1">
+        {pending.map(m => (
+          <div key={m.id} className="rounded-lg p-2 flex items-center gap-2" style={{ background: '#232326', border: '0.5px solid #2a2a2a' }}>
+            <div onClick={() => toggle(m.id)} className="w-4 h-4 rounded flex-shrink-0 flex items-center justify-center" style={{ background: selected.has(m.id) ? '#FFCB05' : '#2a2a2a', border: '0.5px solid #333', cursor: 'pointer' }}>
+              {selected.has(m.id) && <span style={{ color: '#231F20', fontSize: 10 }}>✓</span>}
+            </div>
+            <span className="text-xs font-medium w-10 flex-shrink-0" style={{ color: '#FFCB05' }}>{m.mark_id}</span>
+            <span className="text-xs flex-1" style={{ color: '#888' }}>{m.status}{m.rework_count > 0 ? ` · rework ${m.rework_count}×` : ''}{m.rework_note ? ` — ${m.rework_note}` : ''}</span>
+            <button onClick={() => reject(m.id)} style={chip}>Reject</button>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ── Dispatch ───────────────────────────────────────────────────────────────────
+interface Load {
+  id: string
+  load_number: number
+  description: string | null
+  dispatched_at: string | null
+  fab_marks?: { id: string }[]
+}
+
+function DispatchTab({ jobId, token }: { jobId: string; token: string }) {
+  const [marks, setMarks] = useState<FabMark[]>([])
+  const [loads, setLoads] = useState<Load[]>([])
+  const [desc, setDesc] = useState('')
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const authJson = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+
+  const load = useCallback(async () => {
+    const [mRes, lRes] = await Promise.all([
+      fetch(`/api/fab/jobs/${jobId}/marks`, { headers: { Authorization: `Bearer ${token}` } }),
+      fetch(`/api/fab/jobs/${jobId}/dispatch-loads`, { headers: { Authorization: `Bearer ${token}` } }),
+    ])
+    if (mRes.ok) setMarks((await mRes.json()).marks ?? [])
+    if (lRes.ok) setLoads((await lRes.json()).loads ?? [])
+  }, [jobId, token])
+  useEffect(() => { load() }, [load])
+
+  const ready = marks.filter(m => m.status === 'qc_passed' && !m.dispatch_load_id)
+  const toggle = (id: string) => setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
+
+  async function createLoad() {
+    await fetch(`/api/fab/jobs/${jobId}/dispatch-loads`, { method: 'POST', headers: authJson, body: JSON.stringify({ description: desc.trim() || null }) })
+    setDesc(''); load()
+  }
+  async function assign(loadId: string) {
+    if (!selected.size) return
+    await fetch(`/api/fab/dispatch-loads/${loadId}`, { method: 'PATCH', headers: authJson, body: JSON.stringify({ add: Array.from(selected) }) })
+    setSelected(new Set()); load()
+  }
+  async function dispatchLoad(loadId: string) {
+    const driver = prompt('Driver (optional)') ?? ''
+    await fetch(`/api/fab/dispatch-loads/${loadId}`, { method: 'PATCH', headers: authJson, body: JSON.stringify({ dispatched: true, driver }) })
+    load()
+  }
+
+  return (
+    <div>
+      <div className="flex gap-2 mb-3">
+        <input placeholder="New load description" value={desc} onChange={e => setDesc(e.target.value)} className="flex-1" />
+        <button onClick={createLoad} style={chip}>New load</button>
+      </div>
+
+      <p className="text-xs mb-2" style={{ color: '#777' }}>Ready to load — QC passed ({ready.length})</p>
+      <div className="flex flex-wrap gap-1 mb-4">
+        {ready.length === 0 && <span className="text-xs" style={{ color: '#555' }}>No QC-passed marks waiting.</span>}
+        {ready.map(m => (
+          <button key={m.id} onClick={() => toggle(m.id)} className="text-xs px-2 py-1 rounded-full"
+            style={{ background: selected.has(m.id) ? 'rgba(255,203,5,.15)' : 'transparent', border: `0.5px solid ${selected.has(m.id) ? '#FFCB05' : '#2a2a2a'}`, color: selected.has(m.id) ? '#FFCB05' : '#888' }}>
+            {m.mark_id}
+          </button>
+        ))}
+      </div>
+
+      <div className="flex flex-col gap-2">
+        {loads.map(l => (
+          <div key={l.id} className="rounded-xl p-3" style={{ background: '#232326', border: '0.5px solid #2a2a2a' }}>
+            <div className="flex justify-between items-center">
+              <p className="text-sm font-medium" style={{ color: '#fff' }}>Load {l.load_number}{l.description ? ` — ${l.description}` : ''}</p>
+              <span className="text-xs px-2 py-0.5 rounded-full" style={{ border: `0.5px solid ${l.dispatched_at ? '#97C459' : '#555'}`, color: l.dispatched_at ? '#97C459' : '#777' }}>
+                {l.dispatched_at ? `dispatched ${l.dispatched_at.slice(0, 10)}` : 'pending'}
+              </span>
+            </div>
+            <p className="text-xs mt-1" style={{ color: '#555' }}>{l.fab_marks?.length ?? 0} marks</p>
+            {!l.dispatched_at && (
+              <div className="flex gap-2 mt-2">
+                <button onClick={() => assign(l.id)} disabled={!selected.size} style={{ ...chip, opacity: selected.size ? 1 : .5 }}>Assign selected ({selected.size})</button>
+                <button onClick={() => dispatchLoad(l.id)} style={{ ...chip, borderColor: '#97C459', color: '#97C459' }}>Mark dispatched</button>
+              </div>
+            )}
+          </div>
+        ))}
+        {loads.length === 0 && <p className="text-sm text-center py-4" style={{ color: '#555' }}>No loads yet.</p>}
+      </div>
     </div>
   )
 }
@@ -411,8 +699,9 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
     { id: 'tasks', label: 'Tasks' },
     { id: 'marks', label: 'Marks' },
     { id: 'drawings', label: 'Drawings' },
-    { id: 'treatment', label: 'Treatment' },
-    { id: 'subs', label: 'Subs' },
+    { id: 'packages', label: 'Packages' },
+    { id: 'qc', label: 'QC' },
+    { id: 'dispatch', label: 'Dispatch' },
     { id: 'timelog', label: 'Time' },
   ]
 
@@ -471,8 +760,9 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
           {tab === 'tasks' && <TasksTab jobId={id} token={token} role={role} />}
           {tab === 'marks' && <MarksTab jobId={id} token={token} />}
           {tab === 'drawings' && <DrawingsTab jobId={id} token={token} />}
-          {tab === 'treatment' && <TreatmentTab />}
-          {tab === 'subs' && <SubsTab />}
+          {tab === 'packages' && <PackagesTab jobId={id} token={token} />}
+          {tab === 'qc' && <QCTab jobId={id} token={token} />}
+          {tab === 'dispatch' && <DispatchTab jobId={id} token={token} />}
           {tab === 'timelog' && <TimeLogTab jobId={id} token={token} />}
         </>}
       </div>
