@@ -73,13 +73,28 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     return NextResponse.json({ error: 'mark_ids[] and valid status required' }, { status: 400 })
   }
 
+  // Floor workers (fabricator kiosk token) may only progress IN-HOUSE marks to
+  // in_progress/done. Sending out, returning, QC pass, and any change to a mark
+  // that's locked to a contractor package are supervisor/admin only — this keeps
+  // the QC checkpoint and contractor lock from being bypassed via the kiosk.
+  const isSupervisor = caller.role === 'supervisor' || caller.role === 'admin'
+  if (!isSupervisor && body.status !== 'in_progress' && body.status !== 'done') {
+    return NextResponse.json({ error: 'Supervisor or admin required for this status' }, { status: 403 })
+  }
+
   const admin = getSupabaseAdmin()
-  const { data, error } = await admin
+  const patch: Record<string, unknown> = { status: body.status, updated_at: new Date().toISOString() }
+  if (body.note !== undefined) patch.note = body.note
+
+  let query = admin
     .from('fab_marks')
-    .update({ status: body.status, note: body.note ?? null, updated_at: new Date().toISOString() })
+    .update(patch)
     .eq('fab_job_id', id)
     .in('id', body.mark_ids)
-    .select()
+  // Floor workers can never touch a mark that's out at a contractor.
+  if (!isSupervisor) query = query.is('contractor_package_id', null)
+
+  const { data, error } = await query.select()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   await computeAndUpsertProgress(id)

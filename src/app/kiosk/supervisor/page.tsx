@@ -169,6 +169,7 @@ export default function KioskSupervisorPage() {
                 <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
                   {p.status === 'pending' && <button onClick={() => pkgStatus(p.id, 'sent')} style={ghostBtn}>Mark sent</button>}
                   {(p.status === 'sent' || p.status === 'in_progress') && <button onClick={() => pkgStatus(p.id, 'returned')} style={ghostBtn}>Mark returned</button>}
+                  {p.status === 'returned' && <button onClick={() => pkgStatus(p.id, 'inspected')} style={ghostBtn}>Mark inspected</button>}
                   <button onClick={() => pkgLogCall(p.id)} style={ghostBtn}>Log call</button>
                 </div>
               </div>

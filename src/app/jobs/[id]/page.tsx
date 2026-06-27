@@ -411,6 +411,7 @@ function PackagesTab({ jobId, token }: { jobId: string; token: string }) {
               <div className="flex gap-2 mt-2 flex-wrap">
                 {p.status === 'pending' && <button onClick={() => setStatus(p.id, 'sent')} style={chip}>Mark sent</button>}
                 {(p.status === 'sent' || p.status === 'in_progress') && <button onClick={() => setStatus(p.id, 'returned')} style={chip}>Mark returned</button>}
+                {p.status === 'returned' && <button onClick={() => setStatus(p.id, 'inspected')} style={chip}>Mark inspected</button>}
                 <button onClick={() => logCall(p.id)} style={chip}>Log call</button>
               </div>
               <details className="mt-2">
