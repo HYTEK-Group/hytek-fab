@@ -63,7 +63,8 @@ export interface FabTask {
 
 // ── fab_marks ──────────────────────────────────────────────────────────────
 
-export type MarkStatus = 'not_started' | 'in_progress' | 'done' | 'at_treatment' | 'returned'
+export type MarkStatus =
+  | 'not_started' | 'in_progress' | 'done' | 'at_contractor' | 'returned' | 'qc_passed'
 
 export interface FabMark {
   id: string
@@ -76,6 +77,11 @@ export interface FabMark {
   quantity: number
   status: MarkStatus
   note: string | null
+  contractor_package_id: string | null
+  assigned_to: string | null
+  rework_count: number
+  rework_note: string | null
+  dispatch_load_id: string | null
   created_at: string
   updated_at: string
 }
@@ -137,4 +143,125 @@ export interface ReadyQueueItem {
   materials_received: boolean
   /** Both signals true — show "Start fabrication" */
   ready: boolean
+}
+
+// ── fab_pins ───────────────────────────────────────────────────────────────
+
+export interface FabPin {
+  id: string
+  worker_name: string
+  role: UserRole
+  is_active: boolean
+  created_at: string
+}
+
+// ── fab_contractor_packages ─────────────────────────────────────────────────
+
+export type PackageType = 'fabrication' | 'treatment' | 'other'
+export type TreatmentType = 'hdg' | 'etch_primer' | 'powder_coat' | 'two_pack' | 'other'
+export type ContractorPackageStatus =
+  | 'pending' | 'sent' | 'in_progress' | 'returned' | 'inspected'
+
+export interface FabContractorPackage {
+  id: string
+  fab_job_id: string
+  package_type: PackageType
+  treatment_type: TreatmentType | null
+  contractor_name: string
+  contractor_contact: string | null
+  scope_note: string | null
+  sent_at: string | null
+  expected_return_date: string | null
+  returned_at: string | null
+  status: ContractorPackageStatus
+  created_by: string
+  created_at: string
+  updated_at: string
+}
+
+export interface FabContractorUpdate {
+  id: string
+  package_id: string
+  logged_at: string
+  note: string
+  reported_pct: number | null
+  eta: string | null
+  entered_by: string
+  created_at: string
+}
+
+// ── fab_qc_events ──────────────────────────────────────────────────────────
+
+export type QcResult = 'pass' | 'fail'
+export type ReworkType = 'inhouse' | 'contractor'
+
+export interface FabQcEvent {
+  id: string
+  fab_job_id: string
+  mark_id: string
+  inspected_by: string
+  result: QcResult
+  defect_note: string | null
+  rework_type: ReworkType | null
+  created_at: string
+}
+
+// ── fab_dispatch_loads ─────────────────────────────────────────────────────
+
+export interface FabDispatchLoad {
+  id: string
+  fab_job_id: string
+  load_number: number
+  description: string | null
+  planned_date: string | null
+  dispatched_at: string | null
+  driver: string | null
+  note: string | null
+  created_by: string
+  created_at: string
+}
+
+// ── flow_fab_progress (Hub feed) ───────────────────────────────────────────
+
+export type FabProgressStatus = 'in_progress' | 'complete' | 'dispatch_ready' | 'dispatched'
+
+export interface FabProgressPackageSummary {
+  package_id: string
+  package_type: PackageType
+  treatment_type: TreatmentType | null
+  contractor_name: string
+  scope_note: string | null
+  total_marks: number
+  marks_done: number
+  pct: number
+  status: ContractorPackageStatus
+  last_update_date: string | null
+  last_update_note: string | null
+  expected_return_date: string | null
+  returned_at: string | null
+}
+
+export interface FabProgressLoadSummary {
+  load_number: number
+  description: string | null
+  total_marks: number
+  dispatched_at: string | null
+  planned_date: string | null
+}
+
+export interface FabProgressRow {
+  fab_job_id: string
+  quote_number: string
+  hubspot_deal_id: string | null
+  total_marks: number
+  marks_qc_passed: number
+  marks_dispatched: number
+  pct_complete: number
+  inhouse_total: number
+  inhouse_complete: number
+  rework_total: number
+  contractor_packages: FabProgressPackageSummary[]
+  dispatch_loads: FabProgressLoadSummary[]
+  narrative: string
+  status: FabProgressStatus
 }

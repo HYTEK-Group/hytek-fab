@@ -2,7 +2,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
-import { requireFabUser } from '@/lib/get-fab-user'
+import { getUserCaller } from '@/lib/fab-auth'
 import type { TaskStatus } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
@@ -11,8 +11,8 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string; tid: string }> }
 ) {
-  const user = await requireFabUser(req)
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const caller = await getUserCaller(req)
+  if (!caller) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { id, tid } = await params
 
   const body = (await req.json()) as { status?: TaskStatus; assigned_to?: string | null }
