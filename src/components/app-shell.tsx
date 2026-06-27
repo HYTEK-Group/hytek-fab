@@ -10,6 +10,7 @@ const NAV = [
   { href: '/ready',  label: 'Ready',  icon: '☑' },
   { href: '/crew',   label: 'Crew',   icon: '⊕' },
   { href: '/tonnes', label: 'Tonnes', icon: '⊘' },
+  { href: '/report', label: 'Report', icon: '▦' },
 ]
 
 export function AppShell({ children }: { children: React.ReactNode }) {

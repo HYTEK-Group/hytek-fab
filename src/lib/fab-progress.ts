@@ -2,6 +2,7 @@
 // computeAndUpsertProgress() fetches rows and upserts flow_fab_progress.
 import { getSupabaseAdmin } from './supabase-admin'
 import { buildNarrative } from './fab-narrative'
+import { tonnageSummary } from './fab-tonnage'
 import type {
   FabMark, FabContractorPackage, FabContractorUpdate, FabDispatchLoad,
   FabProgressRow, FabProgressPackageSummary, FabProgressLoadSummary, FabProgressStatus,
@@ -24,7 +25,10 @@ export function computeProgressRow(
 ): FabProgressRow {
   const total = marks.length
   const qcPassed = marks.filter(m => m.status === 'qc_passed')
-  const pct = total === 0 ? 0 : Math.round((qcPassed.length / total) * 100)
+  // pct_complete is tonnage-weighted (made = done|qc_passed by weight), so a
+  // heavy column counts for more than a light base plate. marks_qc_passed below
+  // still carries the QC-approved count for anyone who wants that view.
+  const pct = tonnageSummary(marks).pct
 
   const inhouse = marks.filter(m => !m.contractor_package_id)
   const inhouseComplete = inhouse.filter(

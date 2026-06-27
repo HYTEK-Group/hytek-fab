@@ -20,17 +20,17 @@ const job = {
 }
 
 describe('computeProgressRow', () => {
-  it('computes pct from qc_passed / total', () => {
+  it('pct_complete is tonnage-weighted (made = done|qc_passed by weight)', () => {
     const marks = [
-      mark({ id: '1', status: 'qc_passed' }),
-      mark({ id: '2', status: 'qc_passed' }),
-      mark({ id: '3', status: 'done' }),
-      mark({ id: '4', status: 'not_started' }),
+      mark({ id: '1', status: 'qc_passed', weight_kg: 400, quantity: 1 }),  // 400 made
+      mark({ id: '2', status: 'done', weight_kg: 100, quantity: 1 }),       // 100 made
+      mark({ id: '3', status: 'in_progress', weight_kg: 200, quantity: 1 }), // 200 not
+      mark({ id: '4', status: 'not_started', weight_kg: 300, quantity: 1 }), // 300 not
     ]
     const row = computeProgressRow(job, marks, [], [], [], '2026-06-27')
     expect(row.total_marks).toBe(4)
-    expect(row.marks_qc_passed).toBe(2)
-    expect(row.pct_complete).toBe(50)
+    expect(row.marks_qc_passed).toBe(1)
+    expect(row.pct_complete).toBe(50) // 500 made / 1000 total kg
   })
 
   it('counts in-house pool (no package) complete = done|qc_passed', () => {

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/auth-context'
 import { AppShell } from '@/components/app-shell'
 import { supabase } from '@/lib/supabase'
+import { kgToTonnes } from '@/lib/fab-tonnage'
 import type { FabJob, FabTask, FabMark, FabTimeEntry } from '@/lib/types'
 
 type Tab = 'tasks' | 'marks' | 'drawings' | 'packages' | 'qc' | 'dispatch' | 'timelog'
@@ -14,6 +15,11 @@ interface JobDetail extends FabJob {
   task_done: number
   mark_count: number
   mark_done: number
+  total_hours: number
+  total_kg: number
+  made_kg: number
+  tonnage_pct: number
+  marks_missing_weight: number
 }
 
 interface Drawing { name: string; url: string; size?: number }
@@ -693,7 +699,8 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
   if (loading || !user) return null
   if (!job) return <AppShell><div className="p-6 text-center" style={{ color: '#555' }}>Loading…</div></AppShell>
 
-  const pct = job.task_count ? Math.round((job.task_done / job.task_count) * 100) : 0
+  const pct = job.tonnage_pct
+  const taskPct = job.task_count ? Math.round((job.task_done / job.task_count) * 100) : 0
   const canDispatch = (role === 'admin' || role === 'supervisor') && job.status !== 'complete' && !job.dispatch_requested_at
 
   const TABS: { id: Tab; label: string }[] = [
@@ -724,13 +731,20 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
           </div>
           <p className="text-base font-semibold mb-0.5" style={{ color: '#fff' }}>{job.name}</p>
           <p className="text-xs mb-2" style={{ color: '#666' }}>{job.client ?? '—'} {job.on_site_date ? `· On site ${job.on_site_date}` : ''}</p>
-          <div className="flex gap-4 text-xs mb-3" style={{ color: '#555' }}>
-            <span>{job.task_done}/{job.task_count} tasks · {pct}%</span>
+          <div className="flex gap-4 text-xs mb-3 flex-wrap" style={{ color: '#555' }}>
+            <span style={{ color: '#fff' }}>{kgToTonnes(job.made_kg)} / {kgToTonnes(job.total_kg)} t · {pct}%</span>
+            <span>{job.task_done}/{job.task_count} tasks ({taskPct}%)</span>
             <span>{job.mark_done}/{job.mark_count} marks</span>
+            <span>{(job.total_hours ?? 0).toFixed(1)} h</span>
           </div>
-          <div className="rounded-full h-1 mb-3" style={{ background: '#2a2a2a' }}>
+          <div className="rounded-full h-1 mb-1" style={{ background: '#2a2a2a' }}>
             <div className="h-full rounded-full" style={{ background: '#FFCB05', width: `${pct}%` }} />
           </div>
+          {job.marks_missing_weight > 0 && (
+            <p className="text-xs mb-3" style={{ color: '#C9803A' }}>
+              {job.marks_missing_weight} mark(s) missing weight — tonnage may be understated
+            </p>
+          )}
 
           {canDispatch && (
             <button onClick={dispatch} disabled={dispatching} className="w-full rounded-lg text-sm font-medium"
