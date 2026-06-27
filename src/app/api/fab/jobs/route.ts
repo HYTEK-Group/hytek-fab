@@ -3,13 +3,14 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
-import { requireFabUser, requireFabSupervisor } from '@/lib/get-fab-user'
+import { requireFabSupervisor } from '@/lib/get-fab-user'
+import { getUserCaller } from '@/lib/fab-auth'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest) {
-  const user = await requireFabUser(req)
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const caller = await getUserCaller(req)
+  if (!caller) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const admin = getSupabaseAdmin()
   const { data, error } = await admin
