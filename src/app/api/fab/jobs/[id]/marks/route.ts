@@ -4,14 +4,16 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
-import { requireFabUser, requireFabSupervisor } from '@/lib/get-fab-user'
+import { requireFabSupervisor } from '@/lib/get-fab-user'
+import { getUserCaller } from '@/lib/fab-auth'
+import { computeAndUpsertProgress } from '@/lib/fab-progress'
 import type { MarkStatus } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const user = await requireFabUser(req)
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const caller = await getUserCaller(req)
+  if (!caller) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { id } = await params
   const admin = getSupabaseAdmin()
   const { data, error } = await admin
@@ -55,16 +57,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  await computeAndUpsertProgress(id)
   return NextResponse.json({ mark: data }, { status: 201 })
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const user = await requireFabUser(req)
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const caller = await getUserCaller(req)
+  if (!caller) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { id } = await params
 
   const body = (await req.json()) as { mark_ids: string[]; status: MarkStatus; note?: string }
-  const validStatuses: MarkStatus[] = ['not_started', 'in_progress', 'done', 'at_treatment', 'returned']
+  const validStatuses: MarkStatus[] =
+    ['not_started', 'in_progress', 'done', 'at_contractor', 'returned', 'qc_passed']
   if (!body.mark_ids?.length || !validStatuses.includes(body.status)) {
     return NextResponse.json({ error: 'mark_ids[] and valid status required' }, { status: 400 })
   }
@@ -78,5 +82,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     .select()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  await computeAndUpsertProgress(id)
   return NextResponse.json({ marks: data })
 }
