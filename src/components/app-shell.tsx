@@ -8,7 +8,6 @@ import { useAuth } from '@/lib/auth-context'
 const NAV = [
   { href: '/shop',   label: 'Shop',   icon: '⊞' },
   { href: '/ready',  label: 'Ready',  icon: '☑' },
-  { href: '/jobs',   label: 'Jobs',   icon: '⊟' },
   { href: '/crew',   label: 'Crew',   icon: '⊕' },
   { href: '/tonnes', label: 'Tonnes', icon: '⊘' },
 ]
@@ -58,7 +57,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         style={{ background: '#1a1a1c', borderColor: 'var(--border)' }}
       >
         {NAV.map(({ href, label, icon }) => {
-          const active = pathname === href || (href !== '/shop' && pathname.startsWith(href))
+          // Shop owns the job board + individual job pages (/jobs/[id]).
+          const active =
+            pathname === href ||
+            (href !== '/shop' && pathname.startsWith(href)) ||
+            (href === '/shop' && pathname.startsWith('/jobs'))
           return (
             <Link
               key={href}

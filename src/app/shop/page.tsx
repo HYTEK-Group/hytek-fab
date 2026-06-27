@@ -13,14 +13,14 @@ interface JobSummary extends FabJob {
   mark_count: number
   mark_done: number
   total_hours: number
-  has_active_treatment: boolean
+  has_active_packages: boolean
 }
 
 function statusBadge(j: JobSummary) {
   if (j.status === 'complete' || j.dispatch_requested_at)
     return { label: 'Dispatch ready', color: '#97C459', bg: 'rgba(99,153,34,.2)' }
-  if (j.has_active_treatment)
-    return { label: 'At treatment', color: '#85B7EB', bg: 'rgba(55,138,221,.2)' }
+  if (j.has_active_packages)
+    return { label: 'At contractor', color: '#85B7EB', bg: 'rgba(55,138,221,.2)' }
   return { label: 'In progress', color: '#FFCB05', bg: 'rgba(255,203,5,.15)' }
 }
 
