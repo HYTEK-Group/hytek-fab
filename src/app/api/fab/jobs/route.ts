@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
       fab_tasks(id, status),
       fab_time_entries(hours),
       fab_marks(id, status),
-      fab_treatment_batches(id, status)
+      fab_contractor_packages(id, status, package_type)
     `)
     .order('created_at', { ascending: false })
 
@@ -30,19 +30,19 @@ export async function GET(req: NextRequest) {
     const tasks = (j.fab_tasks as Array<{ id: string; status: string }>) ?? []
     const marks = (j.fab_marks as Array<{ id: string; status: string }>) ?? []
     const timeEntries = (j.fab_time_entries as Array<{ hours: number }>) ?? []
-    const batches = (j.fab_treatment_batches as Array<{ id: string; status: string }>) ?? []
+    const packages = (j.fab_contractor_packages as Array<{ id: string; status: string; package_type: string }>) ?? []
     return {
       ...j,
       fab_tasks: undefined,
       fab_marks: undefined,
       fab_time_entries: undefined,
-      fab_treatment_batches: undefined,
+      fab_contractor_packages: undefined,
       task_count: tasks.length,
       task_done: tasks.filter(t => t.status === 'done').length,
       mark_count: marks.length,
-      mark_done: marks.filter(m => m.status === 'done').length,
+      mark_done: marks.filter(m => m.status === 'done' || m.status === 'qc_passed').length,
       total_hours: timeEntries.reduce((s, e) => s + (e.hours ?? 0), 0),
-      has_active_treatment: batches.some(b => b.status === 'at_plant' || b.status === 'dispatched'),
+      has_active_packages: packages.some(p => p.status === 'sent' || p.status === 'in_progress'),
     }
   })
 
