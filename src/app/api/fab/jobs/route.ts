@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { requireFabSupervisor } from '@/lib/get-fab-user'
 import { getUserCaller } from '@/lib/fab-auth'
+import { tonnageSummary } from '@/lib/fab-tonnage'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,7 +20,7 @@ export async function GET(req: NextRequest) {
       *,
       fab_tasks(id, status),
       fab_time_entries(hours),
-      fab_marks(id, status),
+      fab_marks(id, status, weight_kg, quantity),
       fab_contractor_packages(id, status, package_type)
     `)
     .order('created_at', { ascending: false })
@@ -29,9 +30,10 @@ export async function GET(req: NextRequest) {
   // Summarise nested arrays into counts
   const jobs = (data ?? []).map((j: Record<string, unknown>) => {
     const tasks = (j.fab_tasks as Array<{ id: string; status: string }>) ?? []
-    const marks = (j.fab_marks as Array<{ id: string; status: string }>) ?? []
+    const marks = (j.fab_marks as Array<{ id: string; status: string; weight_kg: number | null; quantity: number | null }>) ?? []
     const timeEntries = (j.fab_time_entries as Array<{ hours: number }>) ?? []
     const packages = (j.fab_contractor_packages as Array<{ id: string; status: string; package_type: string }>) ?? []
+    const tonnage = tonnageSummary(marks)
     return {
       ...j,
       fab_tasks: undefined,
@@ -44,6 +46,11 @@ export async function GET(req: NextRequest) {
       mark_done: marks.filter(m => m.status === 'done' || m.status === 'qc_passed').length,
       total_hours: timeEntries.reduce((s, e) => s + (e.hours ?? 0), 0),
       has_active_packages: packages.some(p => p.status === 'sent' || p.status === 'in_progress'),
+      // Tonnage-weighted progress (weight × qty; "made" = done|qc_passed).
+      total_kg: tonnage.total_kg,
+      made_kg: tonnage.made_kg,
+      tonnage_pct: tonnage.pct,
+      marks_missing_weight: tonnage.missing_weight,
     }
   })
 

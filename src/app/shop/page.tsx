@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/auth-context'
 import { AppShell } from '@/components/app-shell'
 import { supabase } from '@/lib/supabase'
+import { kgToTonnes } from '@/lib/fab-tonnage'
 import type { FabJob } from '@/lib/types'
 
 interface JobSummary extends FabJob {
@@ -14,6 +15,10 @@ interface JobSummary extends FabJob {
   mark_done: number
   total_hours: number
   has_active_packages: boolean
+  total_kg: number
+  made_kg: number
+  tonnage_pct: number
+  marks_missing_weight: number
 }
 
 function statusBadge(j: JobSummary) {
@@ -62,7 +67,7 @@ export default function ShopPage() {
           {[
             { label: 'Active jobs', value: active.length },
             { label: 'Dispatch ready', value: dispatchReady.length, highlight: dispatchReady.length > 0 },
-            { label: 'Total hrs (all)', value: jobs.reduce((s, j) => s + j.total_hours, 0).toFixed(0) },
+            { label: 'Total tonnes (all)', value: kgToTonnes(jobs.reduce((s, j) => s + j.total_kg, 0)).toFixed(1) },
           ].map(s => (
             <div key={s.label} className="rounded-xl p-3" style={{ background: '#1e1e21', border: '0.5px solid #2a2a2a' }}>
               <p className="text-xs mb-1" style={{ color: '#555' }}>{s.label}</p>
@@ -95,7 +100,7 @@ export default function ShopPage() {
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {jobs.map(job => {
             const badge = statusBadge(job)
-            const pct = job.task_count ? Math.round((job.task_done / job.task_count) * 100) : 0
+            const pct = job.tonnage_pct
             return (
               <button
                 key={job.id}
@@ -113,9 +118,14 @@ export default function ShopPage() {
                   <div className="h-full rounded-full" style={{ background: '#FFCB05', width: `${pct}%` }} />
                 </div>
                 <div className="flex justify-between text-xs" style={{ color: '#555' }}>
-                  <span>{job.task_done}/{job.task_count} tasks</span>
+                  <span>{kgToTonnes(job.made_kg)} / {kgToTonnes(job.total_kg)} t · {pct}%</span>
                   <span>{job.on_site_date ?? '—'}</span>
                 </div>
+                {job.marks_missing_weight > 0 && (
+                  <p className="text-xs mt-1" style={{ color: '#C9803A' }}>
+                    {job.marks_missing_weight} mark(s) missing weight
+                  </p>
+                )}
               </button>
             )
           })}
