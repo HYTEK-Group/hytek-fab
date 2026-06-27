@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
+import { createHmac } from 'crypto'
 import { createKioskToken, verifyKioskToken } from '../fab-kiosk-token'
 
 beforeEach(() => {
@@ -26,7 +27,6 @@ describe('fab-kiosk-token', () => {
 
   it('rejects an expired token', () => {
     process.env.KIOSK_SECRET = 'test-secret-test-secret-test-secret-1234'
-    const { createHmac } = require('crypto')
     const payload = Buffer.from(JSON.stringify({
       worker_name: 'Jamie', role: 'fabricator', exp: 1,
     })).toString('base64url')
