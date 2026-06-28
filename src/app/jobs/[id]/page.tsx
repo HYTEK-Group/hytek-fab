@@ -191,6 +191,8 @@ function MarksTab({ jobId, token }: { jobId: string; token: string }) {
   const [newMark, setNewMark] = useState({ mark_id: '', section: '', length_mm: '', weight_kg: '', quantity: '1' })
   const [importing, setImporting] = useState(false)
   const [importMsg, setImportMsg] = useState('')
+  const [bomImporting, setBomImporting] = useState(false)
+  const [bomMsg, setBomMsg] = useState('')
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/fab/jobs/${jobId}/marks`, { headers: { Authorization: `Bearer ${token}` } })
@@ -218,6 +220,25 @@ function MarksTab({ jobId, token }: { jobId: string; token: string }) {
       setImportMsg(msg)
       load()
     } finally { setImporting(false) }
+  }
+
+  async function importBom(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? [])
+    e.target.value = ''
+    if (!files.length) return
+    setBomImporting(true); setBomMsg('')
+    try {
+      const fd = new FormData()
+      for (const f of files) fd.append('file', f)
+      const res = await fetch(`/api/fab/jobs/${jobId}/import-bom`, {
+        method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd,
+      })
+      const j = await res.json()
+      if (!res.ok) { setBomMsg('❌ ' + (j.error ?? 'BOM import failed')); return }
+      let msg = `✓ ${j.total_lines} BOM line(s) from ${j.reports?.length ?? 0} report(s) → purchasing`
+      if (j.skipped?.length) msg += `, ${j.skipped.length} skipped`
+      setBomMsg(msg)
+    } finally { setBomImporting(false) }
   }
 
   useEffect(() => { load() }, [load])
@@ -279,6 +300,14 @@ function MarksTab({ jobId, token }: { jobId: string; token: string }) {
           </label>
         </div>
         {importMsg && <p className="text-xs mt-2" style={{ color: importMsg.startsWith('❌') ? '#ff6b6b' : '#97C459' }}>{importMsg}</p>}
+        <div className="flex items-center justify-between gap-2 mt-3 pt-3" style={{ borderTop: '0.5px solid #2a2a2a' }}>
+          <p className="text-xs" style={{ color: '#555' }}>Import BOM reports (Part Material / Plate / Bolt / Chemset) — for purchasing</p>
+          <label className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: 'transparent', color: '#FFCB05', border: '0.5px solid #FFCB05', cursor: 'pointer', opacity: bomImporting ? 0.5 : 1 }}>
+            {bomImporting ? 'Importing…' : 'Import BOM'}
+            <input type="file" accept=".xlsx,.xls" multiple disabled={bomImporting} onChange={importBom} style={{ display: 'none' }} />
+          </label>
+        </div>
+        {bomMsg && <p className="text-xs mt-2" style={{ color: bomMsg.startsWith('❌') ? '#ff6b6b' : '#97C459' }}>{bomMsg}</p>}
       </div>
 
       {/* Progress */}

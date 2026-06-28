@@ -44,10 +44,16 @@ export async function GET(req: NextRequest) {
     const hubRes = await getJobStateByQuoteNumber(job.quote_number)
     const hubState = hubRes.ok ? hubRes.state : null
 
-    const ssDrawingsIssued = hubState?.ready_to_ship ?? false
+    // The real manufacturing trigger is the deliberate "Release to Factory"
+    // (ss_release). Prefer it; fall back to ready_to_ship when the Hub hasn't
+    // published a release yet, so the queue keeps working before the Hub deploy
+    // and auto-upgrades to release-gated the moment ss_release appears.
+    const ssRelease = hubState?.ss_release ?? null
+    const ssReleased = ssRelease != null
+    const ssDrawingsIssued = ssReleased || (hubState?.ready_to_ship ?? false)
     const materialsReceived = hubState?.materials_received ?? false
 
-    // Only include if at least drawings are issued (otherwise it's not relevant to fab)
+    // Only include if released (or, pre-release, drawings issued) — else not relevant to fab
     if (!ssDrawingsIssued && !materialsReceived) continue
 
     results.push({
@@ -58,6 +64,8 @@ export async function GET(req: NextRequest) {
       on_site_date: hubState?.on_site_date ?? null,
       ss_drawings_issued: ssDrawingsIssued,
       materials_received: materialsReceived,
+      ss_released: ssReleased,
+      release_version: ssRelease?.version ?? null,
       ready: ssDrawingsIssued && materialsReceived,
     })
   }

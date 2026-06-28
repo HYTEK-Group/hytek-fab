@@ -9,3 +9,7 @@ node_modules/
 
 # Claude Code local worktrees/state
 .claude/
+
+# ss-ingest bridge (server-only secrets + log)
+scripts/ss-ingest-bridge.env.cmd
+scripts/ss-ingest-bridge.log
