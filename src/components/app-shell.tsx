@@ -23,6 +23,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     router.push('/login')
   }
 
+  // Worker/PIN roster is admin/supervisor only.
+  const navItems = [
+    ...NAV,
+    ...(profile?.role === 'admin' || profile?.role === 'supervisor'
+      ? [{ href: '/admin/workers', label: 'Workers', icon: '☷' }]
+      : []),
+  ]
+
   return (
     <div className="min-h-screen flex flex-col" style={{ background: 'var(--background)' }}>
       {/* Header */}
@@ -57,7 +65,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         className="flex border-t flex-shrink-0"
         style={{ background: '#1a1a1c', borderColor: 'var(--border)' }}
       >
-        {NAV.map(({ href, label, icon }) => {
+        {navItems.map(({ href, label, icon }) => {
           // Shop owns the job board + individual job pages (/jobs/[id]).
           const active =
             pathname === href ||
