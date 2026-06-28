@@ -2,15 +2,15 @@
 // DELETE /api/fab/pin/workers/[id] — admin: deactivate (soft, is_active=false)
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
-import { requireFabSupervisor } from '@/lib/get-fab-user'
+import { getSupervisorCaller } from '@/lib/fab-auth'
 import { hashPin, isValidPinFormat } from '@/lib/fab-pin'
 import type { UserRole } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const user = await requireFabSupervisor(req)
-  if (!user) return NextResponse.json({ error: 'Supervisor or admin required' }, { status: 403 })
+  const caller = await getSupervisorCaller(req)
+  if (!caller) return NextResponse.json({ error: 'Supervisor or admin required' }, { status: 403 })
   const { id } = await params
   const body = (await req.json()) as
     { pin?: string; role?: UserRole; is_active?: boolean; worker_name?: string }
@@ -41,8 +41,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const user = await requireFabSupervisor(req)
-  if (!user) return NextResponse.json({ error: 'Supervisor or admin required' }, { status: 403 })
+  const caller = await getSupervisorCaller(req)
+  if (!caller) return NextResponse.json({ error: 'Supervisor or admin required' }, { status: 403 })
   const { id } = await params
   const admin = getSupabaseAdmin()
   const { error } = await admin.from('fab_pins').update({ is_active: false }).eq('id', id)

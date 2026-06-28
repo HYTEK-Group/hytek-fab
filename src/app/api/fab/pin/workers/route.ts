@@ -2,15 +2,15 @@
 // POST /api/fab/pin/workers — admin: add a worker with a PIN
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
-import { requireFabSupervisor } from '@/lib/get-fab-user'
+import { getSupervisorCaller } from '@/lib/fab-auth'
 import { hashPin, isValidPinFormat } from '@/lib/fab-pin'
 import type { UserRole } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest) {
-  const user = await requireFabSupervisor(req)
-  if (!user) return NextResponse.json({ error: 'Supervisor or admin required' }, { status: 403 })
+  const caller = await getSupervisorCaller(req)
+  if (!caller) return NextResponse.json({ error: 'Supervisor or admin required' }, { status: 403 })
   const admin = getSupabaseAdmin()
   const { data, error } = await admin
     .from('fab_pins')
@@ -21,8 +21,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const user = await requireFabSupervisor(req)
-  if (!user) return NextResponse.json({ error: 'Supervisor or admin required' }, { status: 403 })
+  const caller = await getSupervisorCaller(req)
+  if (!caller) return NextResponse.json({ error: 'Supervisor or admin required' }, { status: 403 })
   const body = (await req.json()) as { worker_name?: string; pin?: string; role?: UserRole }
   if (!body.worker_name?.trim()) {
     return NextResponse.json({ error: 'worker_name required' }, { status: 400 })

@@ -14,6 +14,7 @@ interface Session { worker_name: string; role: string; token: string }
 interface Job { id: string; quote_number: string; name: string; mark_count?: number; mark_done?: number }
 interface Mark { id: string; mark_id: string; status: string; rework_count: number; rework_note: string | null; contractor_package_id: string | null }
 interface Pkg { id: string; contractor_name: string; scope_note: string | null; status: string; package_type: string; treatment_type: string | null; fab_marks?: { id: string }[] }
+interface Worker { id: string; worker_name: string; role: string; is_active: boolean }
 
 export default function KioskSupervisorPage() {
   const router = useRouter()
@@ -24,6 +25,12 @@ export default function KioskSupervisorPage() {
   const [packages, setPackages] = useState<Pkg[]>([])
   const [sel, setSel] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
+  const [workers, setWorkers] = useState<Worker[]>([])
+  const [wName, setWName] = useState('')
+  const [wPin, setWPin] = useState('')
+  const [wRole, setWRole] = useState('fabricator')
+  const [wMsg, setWMsg] = useState('')
+  const [showWorkers, setShowWorkers] = useState(false)
 
   const signOut = useCallback(() => {
     sessionStorage.removeItem('fab_kiosk')
@@ -45,6 +52,9 @@ export default function KioskSupervisorPage() {
     fetch('/api/fab/jobs', { headers: { authorization: `Bearer ${s.token}` } })
       .then(r => r.status === 401 ? (signOut(), null) : r.json())
       .then(j => { if (j) { setJobs(j.jobs ?? []); setLoading(false) } })
+    fetch('/api/fab/pin/workers', { headers: { authorization: `Bearer ${s.token}` } })
+      .then(r => r.ok ? r.json() : { workers: [] })
+      .then(j => setWorkers(j.workers ?? []))
   }, [router, signOut])
 
   useEffect(() => {
@@ -115,6 +125,28 @@ export default function KioskSupervisorPage() {
     refresh()
   }
 
+  async function reloadWorkers() {
+    const res = await fetch('/api/fab/pin/workers', { headers: authHeaders() })
+    if (res.ok) setWorkers((await res.json()).workers ?? [])
+  }
+  async function addWorker() {
+    setWMsg('')
+    if (!wName.trim()) { setWMsg('Enter a name'); return }
+    if (!/^\d{4}$/.test(wPin)) { setWMsg('PIN must be 4 digits'); return }
+    const res = await fetch('/api/fab/pin/workers', {
+      method: 'POST', headers: authHeaders(true),
+      body: JSON.stringify({ worker_name: wName.trim(), pin: wPin, role: wRole }),
+    })
+    const j = await res.json()
+    if (!res.ok) { setWMsg(j.error ?? 'Failed'); return }
+    setWName(''); setWPin(''); setWRole('fabricator'); setWMsg('✓ Added')
+    reloadWorkers()
+  }
+  async function deactivateWorker(id: string) {
+    await fetch(`/api/fab/pin/workers/${id}`, { method: 'DELETE', headers: authHeaders() })
+    reloadWorkers()
+  }
+
   if (loading) return <main style={shell}><p>Loading…</p></main>
 
   return (
@@ -133,6 +165,33 @@ export default function KioskSupervisorPage() {
               <div style={{ fontSize: 13, opacity: 0.7 }}>{(j.mark_done ?? 0)}/{(j.mark_count ?? 0)} marks complete</div>
             </button>
           ))}
+
+          <div style={{ marginTop: 24, borderTop: '1px solid #2c2826', paddingTop: 16 }}>
+            <button onClick={() => setShowWorkers(v => !v)} style={ghostBtn}>
+              {showWorkers ? '▾' : '▸'} Workers ({workers.filter(w => w.is_active).length})
+            </button>
+            {showWorkers && (
+              <div style={{ marginTop: 12 }}>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 8 }}>
+                  <input placeholder="Name" value={wName} onChange={e => setWName(e.target.value)} style={inp} />
+                  <input placeholder="4-digit PIN" value={wPin} onChange={e => setWPin(e.target.value)} maxLength={4} inputMode="numeric" style={{ ...inp, width: 120 }} />
+                  <select value={wRole} onChange={e => setWRole(e.target.value)} style={inp}>
+                    <option value="fabricator">Fabricator</option>
+                    <option value="supervisor">Supervisor</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                  <button onClick={addWorker} style={{ ...primaryBtn, marginBottom: 0 }}>Add</button>
+                </div>
+                {wMsg && <p style={{ fontSize: 13, color: wMsg.startsWith('✓') ? '#97C459' : '#ff6b6b', marginBottom: 8 }}>{wMsg}</p>}
+                {workers.filter(w => w.is_active).map(w => (
+                  <div key={w.id} style={row}>
+                    <span style={{ flex: 1 }}>{w.worker_name} <span style={{ opacity: 0.6 }}>({w.role})</span></span>
+                    <button onClick={() => deactivateWorker(w.id)} style={ghostBtn}>Remove</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </>
       )}
 
@@ -189,3 +248,4 @@ const pkgCard: React.CSSProperties = { background: '#2c2826', border: '1px solid
 const row: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', borderBottom: '1px solid #3a3633' }
 const primaryBtn: React.CSSProperties = { background: YELLOW, color: BLACK, border: 'none', borderRadius: 10, padding: '10px 18px', fontWeight: 700, cursor: 'pointer', marginBottom: 12 }
 const ghostBtn: React.CSSProperties = { background: 'transparent', color: '#fff', border: '1px solid #555', borderRadius: 10, padding: '8px 14px', cursor: 'pointer' }
+const inp: React.CSSProperties = { background: '#1a1a1c', color: '#fff', border: '1px solid #444', borderRadius: 8, padding: '8px 10px', fontSize: 14 }
