@@ -120,11 +120,36 @@ function MarksTab({ jobId, token }: { jobId: string; token: string }) {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [adding, setAdding] = useState(false)
   const [newMark, setNewMark] = useState({ mark_id: '', section: '', length_mm: '', weight_kg: '', quantity: '1' })
+  const [importing, setImporting] = useState(false)
+  const [importMsg, setImportMsg] = useState('')
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/fab/jobs/${jobId}/marks`, { headers: { Authorization: `Bearer ${token}` } })
     if (res.ok) setMarks((await res.json()).marks ?? [])
   }, [jobId, token])
+
+  async function importAssembly(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setImporting(true); setImportMsg('')
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await fetch(`/api/fab/jobs/${jobId}/import-assembly`, {
+        method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd,
+      })
+      const j = await res.json()
+      if (!res.ok) { setImportMsg('❌ ' + (j.error ?? 'Import failed')); return }
+      let msg = `✓ Issue ${j.version}: ${j.parsed} assemblies (${(j.total_kg / 1000).toFixed(2)} t). Added ${j.added}`
+      if (j.changed_applied) msg += `, updated ${j.changed_applied}`
+      if (j.protected?.length) msg += `, ${j.protected.length} protected (review w/ detailing)`
+      if (j.removed?.length) msg += `, ${j.removed.length} removed (review)`
+      if (j.project_match === false) msg += ` ⚠ file is ${j.project_number}, job is ${j.quote_number}`
+      setImportMsg(msg)
+      load()
+    } finally { setImporting(false) }
+  }
 
   useEffect(() => { load() }, [load])
 
@@ -175,6 +200,18 @@ function MarksTab({ jobId, token }: { jobId: string; token: string }) {
 
   return (
     <div>
+      {/* Import Assembly List */}
+      <div className="rounded-xl p-3 mb-3" style={{ background: '#232326', border: '0.5px solid #2a2a2a' }}>
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs" style={{ color: '#555' }}>Import Tekla Assembly List (.xlsx) — auto-loads marks + weights</p>
+          <label className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: '#FFCB05', color: '#231F20', cursor: 'pointer', opacity: importing ? 0.5 : 1 }}>
+            {importing ? 'Importing…' : 'Import'}
+            <input type="file" accept=".xlsx,.xls" disabled={importing} onChange={importAssembly} style={{ display: 'none' }} />
+          </label>
+        </div>
+        {importMsg && <p className="text-xs mt-2" style={{ color: importMsg.startsWith('❌') ? '#ff6b6b' : '#97C459' }}>{importMsg}</p>}
+      </div>
+
       {/* Progress */}
       <div className="flex items-center gap-3 mb-3">
         <div className="flex-1 rounded-full h-1" style={{ background: '#2a2a2a' }}>

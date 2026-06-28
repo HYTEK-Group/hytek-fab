@@ -30,6 +30,12 @@ export function computeProgressRow(
   // still carries the QC-approved count for anyone who wants that view.
   const pct = tonnageSummary(marks).pct
 
+  // Tonnes for the Hub feed: total = all marks; complete = QC-passed only
+  // (the Hub's "complete"/approved semantic). weight is per-one × quantity.
+  const kg = (m: FabMark) => (m.weight_kg ?? 0) * (m.quantity ?? 1)
+  const tonnesTotal = Math.round((marks.reduce((s, m) => s + kg(m), 0) / 1000) * 100) / 100
+  const tonnesComplete = Math.round((qcPassed.reduce((s, m) => s + kg(m), 0) / 1000) * 100) / 100
+
   const inhouse = marks.filter(m => !m.contractor_package_id)
   const inhouseComplete = inhouse.filter(
     m => m.status === 'done' || m.status === 'qc_passed',
@@ -106,6 +112,8 @@ export function computeProgressRow(
     inhouse_total: inhouse.length,
     inhouse_complete: inhouseComplete,
     rework_total: reworkTotal,
+    tonnes_total: tonnesTotal,
+    tonnes_complete: tonnesComplete,
     contractor_packages: packageSummaries,
     dispatch_loads: loadSummaries,
     status,

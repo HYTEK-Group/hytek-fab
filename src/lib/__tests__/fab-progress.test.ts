@@ -31,6 +31,8 @@ describe('computeProgressRow', () => {
     expect(row.total_marks).toBe(4)
     expect(row.marks_qc_passed).toBe(1)
     expect(row.pct_complete).toBe(50) // 500 made / 1000 total kg
+    expect(row.tonnes_total).toBe(1) // 1000 kg
+    expect(row.tonnes_complete).toBe(0.4) // 400 kg qc-passed
   })
 
   it('counts in-house pool (no package) complete = done|qc_passed', () => {
