@@ -104,11 +104,10 @@ for (const j of jobs) {
   console.log(`\n${j.jobNo} — ${j.name}  [${j.assemblies.length} list(s), ${j.drawings.length} drawing(s)]`)
   if (cfg.dryRun) { processed++; continue }
 
-  await sb.from('fab_jobs').upsert({
+  const { data: job } = await sb.from('fab_jobs').upsert({
     quote_number: j.jobNo, name: j.name, client: j.customer,
     status: 'in_progress', compliance_mode: 'permissive', started_by: 'ss-ingest-bridge',
-  }, { onConflict: 'quote_number' })
-  const { data: job } = await sb.from('fab_jobs').select('id').eq('quote_number', j.jobNo).single()
+  }, { onConflict: 'quote_number' }).select('id').single()
   if (!job) { console.log('  ! could not create/find the job — skipping'); continue }
 
   for (const f of j.assemblies) {

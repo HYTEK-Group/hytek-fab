@@ -47,6 +47,23 @@ describe('diffMarks', () => {
     expect(needsReview(d)).toBe(true)
   })
 
+  it('matches a colliding mark from another source as a protected change, not an add', () => {
+    const d = diffMarks(
+      [pm({ mark_id: 'A1', weight_kg: 99 })],
+      [em({ mark_id: 'A1', weight_kg: 50, source_file: 'OTHER', manually_edited: true })],
+      'THIS',
+    )
+    expect(d.added).toHaveLength(0)
+    expect(d.changed).toHaveLength(1)
+    expect(d.changed[0].isProtected).toBe(true) // manually_edited → not overwritten
+  })
+
+  it('scopes removals to the source being re-imported', () => {
+    const existing = [em({ mark_id: 'A1', source_file: 'BLOCK1' }), em({ mark_id: 'B1', source_file: 'BLOCK2' })]
+    const d = diffMarks([], existing, 'BLOCK1')
+    expect(d.removed.map(x => x.mark_id)).toEqual(['A1']) // B1 (other source) untouched
+  })
+
   it('markHasWork: package/load/rework all count', () => {
     expect(markHasWork(em({ status: 'not_started', contractor_package_id: 'p' }))).toBe(true)
     expect(markHasWork(em({ status: 'not_started', dispatch_load_id: 'L' }))).toBe(true)

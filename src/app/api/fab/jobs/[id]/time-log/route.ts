@@ -39,6 +39,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   const admin = getSupabaseAdmin()
+
+  // task_id (if given) must belong to THIS job — don't pollute another job's matrix.
+  if (body.task_id) {
+    const { data: tk } = await admin
+      .from('fab_tasks').select('id').eq('id', body.task_id).eq('fab_job_id', id).maybeSingle()
+    if (!tk) return NextResponse.json({ error: 'task does not belong to this job' }, { status: 400 })
+  }
+
   const { data, error } = await admin
     .from('fab_time_entries')
     .insert({

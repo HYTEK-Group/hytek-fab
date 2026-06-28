@@ -55,26 +55,26 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const sourceKey = stableSource(file.name)
   const sourceHash = createHash('sha256').update(JSON.stringify(parsed.marks)).digest('hex')
 
-  // Existing marks for this job, scoped to this source for diff/removal detection
-  // (other blocks' marks have a different source_file and are untouched).
+  // ALL marks for this job — match against every mark (so a parsed mark that
+  // collides with a hand-entered or other-block mark is a protected CHANGE, not a
+  // silent overwrite). Removal detection is scoped to this report via sourceKey.
   const { data: allExisting } = await admin.from('fab_marks').select('*').eq('fab_job_id', id)
   const existing = (allExisting ?? []) as Array<Record<string, unknown>>
-  const inScope: ExistingMark[] = existing
-    .filter(m => (m.source_file ?? null) === sourceKey)
-    .map(m => ({
-      mark_id: String(m.mark_id),
-      status: String(m.status ?? 'not_started'),
-      section: (m.section as string) ?? null,
-      length_mm: (m.length_mm as number) ?? null,
-      weight_kg: (m.weight_kg as number) ?? null,
-      quantity: (m.quantity as number) ?? 1,
-      manually_edited: !!m.manually_edited,
-      contractor_package_id: (m.contractor_package_id as string) ?? null,
-      dispatch_load_id: (m.dispatch_load_id as string) ?? null,
-      rework_count: (m.rework_count as number) ?? 0,
-    }))
+  const existingMarks: ExistingMark[] = existing.map(m => ({
+    mark_id: String(m.mark_id),
+    status: String(m.status ?? 'not_started'),
+    section: (m.section as string) ?? null,
+    length_mm: (m.length_mm as number) ?? null,
+    weight_kg: (m.weight_kg as number) ?? null,
+    quantity: (m.quantity as number) ?? 1,
+    manually_edited: !!m.manually_edited,
+    contractor_package_id: (m.contractor_package_id as string) ?? null,
+    dispatch_load_id: (m.dispatch_load_id as string) ?? null,
+    rework_count: (m.rework_count as number) ?? 0,
+    source_file: (m.source_file as string) ?? null,
+  }))
 
-  const diff = diffMarks(parsed.marks, inScope)
+  const diff = diffMarks(parsed.marks, existingMarks, sourceKey)
 
   const { data: batches } = await admin
     .from('fab_import_batches').select('issue_version')
@@ -89,7 +89,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     upserts.push({
       fab_job_id: id, mark_id: p.mark_id.toUpperCase(), description: p.description, section: p.section,
       length_mm: p.length_mm, weight_kg: p.weight_kg, quantity: p.quantity, coating: p.coating,
-      status: 'not_started', source: 'manual', source_issue: version, source_file: sourceKey, source_hash: sourceHash,
+      status: 'not_started', source: 'import', source_issue: version, source_file: sourceKey, source_hash: sourceHash,
     })
   }
   for (const d of diff.changed) {
@@ -98,7 +98,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     upserts.push({
       fab_job_id: id, mark_id: p.mark_id.toUpperCase(), description: p.description, section: p.section,
       length_mm: p.length_mm, weight_kg: p.weight_kg, quantity: p.quantity, coating: p.coating,
-      source: 'manual', source_issue: version, source_file: sourceKey, source_hash: sourceHash,
+      source: 'import', source_issue: version, source_file: sourceKey, source_hash: sourceHash,
     })
   }
   if (upserts.length) {
@@ -122,7 +122,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   return NextResponse.json({
     ok: true,
     version,
-    first_import: inScope.length === 0,
+    first_import: version === 1,
     project_number: parsed.project_number,
     quote_number: job.quote_number,
     project_match: !parsed.project_number || parsed.project_number === job.quote_number,

@@ -33,8 +33,11 @@ export async function PATCH(
     if (body.status !== 'done') patch.completed_at = null
   }
   if ('assigned_to' in body) patch.assigned_to = body.assigned_to
-  if ('estimated_hours' in body) patch.estimated_hours = body.estimated_hours
-  if ('due_on' in body) patch.due_on = body.due_on
+  // Allotted hours / due date are the supervisor's locked expectation — only
+  // supervisor/admin may change them (a fabricator can still tick status/assign).
+  const isSup = caller.role === 'supervisor' || caller.role === 'admin'
+  if (isSup && 'estimated_hours' in body) patch.estimated_hours = body.estimated_hours
+  if (isSup && 'due_on' in body) patch.due_on = body.due_on
 
   const admin = getSupabaseAdmin()
   const { data, error } = await admin
