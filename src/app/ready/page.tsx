@@ -87,7 +87,9 @@ export default function ReadyQueuePage() {
                     ? { background: 'rgba(99,153,34,.15)', color: '#97C459', border: '0.5px solid rgba(99,153,34,.3)' }
                     : { background: 'rgba(136,136,136,.1)', color: '#555', border: '0.5px solid #2a2a2a' }}
                 >
-                  {item.ss_drawings_issued ? '✓ Drawings issued' : '⧖ Awaiting drawings'}
+                  {item.ss_released
+                    ? `✓ Released to factory${item.release_version ? ` (v${item.release_version})` : ''}`
+                    : item.ss_drawings_issued ? '✓ Drawings issued' : '⧖ Awaiting release'}
                 </span>
                 <span
                   className="text-xs px-2 py-0.5 rounded-full"

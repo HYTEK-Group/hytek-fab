@@ -117,14 +117,28 @@ export interface FabWeeklyEntry {
 
 // ── Hub job-state response ─────────────────────────────────────────────────
 
+/** One stream's latest "Release to Factory" (Hub flow_releases). Present once the
+ *  detailing app has deliberately released the stream; null/absent before that. */
+export interface ReleaseSummary {
+  version: number
+  released_at: string | null
+  released_by: string | null
+  note: string | null
+}
+
 export interface HubJobState {
   ok: boolean
   deal_id: string | null
   quote_number: string | null
   state: string
   tier: string | null
-  /** true = all SS drawing tasks approved via detailing_handoffs */
+  /** true = all SS drawing tasks approved via detailing_handoffs (internal QA —
+   *  demoted: a precondition, NOT the manufacturing trigger). */
   ready_to_ship: boolean
+  /** The deliberate "Release to Factory" per stream (the real trigger). Optional:
+   *  absent until the Hub publishes it — fab falls back to ready_to_ship until then. */
+  ss_release?: ReleaseSummary | null
+  lws_release?: ReleaseSummary | null
   missing: string[]
   /** true = purchasing confirmed steel delivered (not yet in Hub — default false) */
   materials_received?: boolean
@@ -143,6 +157,10 @@ export interface ReadyQueueItem {
   on_site_date: string | null
   ss_drawings_issued: boolean
   materials_received: boolean
+  /** true = a deliberate "Release to Factory" (ss_release) is present on the Hub. */
+  ss_released: boolean
+  /** the ss_release version, when released. */
+  release_version: number | null
   /** Both signals true — show "Start fabrication" */
   ready: boolean
 }

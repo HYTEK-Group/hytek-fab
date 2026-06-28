@@ -10,17 +10,9 @@ import { getSupervisorCaller } from '@/lib/fab-auth'
 import { parseAssemblyRows, type Row } from '@/lib/tekla-assembly'
 import { diffMarks, needsReview, type ExistingMark } from '@/lib/fab-import'
 import { computeAndUpsertProgress } from '@/lib/fab-progress'
+import { stableSource } from '@/lib/source-key'
 
 export const dynamic = 'force-dynamic'
-
-/** Stable per-block report identity (strips the _IFF_<date> + extension), so a
- *  re-issue of the same block reconciles against the right marks. */
-function stableSource(filename: string): string {
-  return filename
-    .replace(/\.(xlsx|xls)$/i, '')
-    .replace(/_iff_\d{1,2}[.\-]\d{1,2}[.\-]\d{2,4}$/i, '')
-    .trim()
-}
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const caller = await getSupervisorCaller(req)
