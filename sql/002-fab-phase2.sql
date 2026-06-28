@@ -1,9 +1,9 @@
 -- =====================================================================
 -- HYTEK Fab — 002: Phase 2 (PIN kiosk, packages, QC, dispatch, progress)
 -- =====================================================================
--- Target: SHARED OPS project (gqtikzguvhukpujyxkey)
+-- Target: SHARED OPS project (gqtikzguvhukpujyxkez)
 -- Apply BY HAND in Supabase SQL editor — run scripts/whichdb.mjs first
--- and confirm the project ref in the editor URL is gqtikzguvhukpujyxkey.
+-- and confirm the project ref in the editor URL is gqtikzguvhukpujyxkez.
 --
 -- Idempotent: IF NOT EXISTS / DROP ... IF EXISTS / DROP POLICY throughout.
 -- Leaves fab_sub_packages and fab_treatment_batches untouched (no new writes).
