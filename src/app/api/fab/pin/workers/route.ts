@@ -31,6 +31,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'PIN must be 4 digits' }, { status: 400 })
   }
   const role: UserRole = body.role ?? 'fabricator'
+  if (role === 'admin' && caller.role !== 'admin') {
+    return NextResponse.json({ error: 'Only an admin can grant the admin role' }, { status: 403 })
+  }
   const admin = getSupabaseAdmin()
   const pin_hash = await hashPin(body.pin!)
   const { data, error } = await admin

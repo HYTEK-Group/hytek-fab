@@ -15,6 +15,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const body = (await req.json()) as
     { pin?: string; role?: UserRole; is_active?: boolean; worker_name?: string }
 
+  if (body.role === 'admin' && caller.role !== 'admin') {
+    return NextResponse.json({ error: 'Only an admin can grant the admin role' }, { status: 403 })
+  }
+
   const patch: Record<string, unknown> = {}
   if (body.worker_name !== undefined) patch.worker_name = body.worker_name.trim()
   if (body.role !== undefined) patch.role = body.role

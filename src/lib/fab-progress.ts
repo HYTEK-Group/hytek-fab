@@ -32,7 +32,7 @@ export function computeProgressRow(
 
   // Tonnes for the Hub feed: total = all marks; complete = QC-passed only
   // (the Hub's "complete"/approved semantic). weight is per-one × quantity.
-  const kg = (m: FabMark) => (m.weight_kg ?? 0) * (m.quantity ?? 1)
+  const kg = (m: FabMark) => Math.max(0, m.weight_kg ?? 0) * (m.quantity ?? 1)
   const tonnesTotal = Math.round((marks.reduce((s, m) => s + kg(m), 0) / 1000) * 100) / 100
   const tonnesComplete = Math.round((qcPassed.reduce((s, m) => s + kg(m), 0) / 1000) * 100) / 100
 

@@ -16,6 +16,7 @@ export interface ExistingMark {
   contractor_package_id?: string | null
   dispatch_load_id?: string | null
   rework_count?: number | null
+  source_file?: string | null
 }
 
 export type ChangeKind = 'added' | 'changed' | 'removed' | 'unchanged'
@@ -48,7 +49,12 @@ export function markHasWork(m: ExistingMark): boolean {
   )
 }
 
-export function diffMarks(parsed: ParsedMark[], existing: ExistingMark[]): ImportDiff {
+// `existing` should be ALL of the job's marks (so a parsed mark that collides
+// with a hand-entered or other-source mark is treated as a CHANGE — and thus
+// protected — not a fresh add that silently overwrites). `sourceKey` scopes the
+// "removed" detection to marks from the same report being re-imported; pass
+// undefined to treat every existing mark as in scope.
+export function diffMarks(parsed: ParsedMark[], existing: ExistingMark[], sourceKey?: string): ImportDiff {
   const exByKey = new Map(existing.map(m => [m.mark_id.toUpperCase(), m]))
   const paKeys = new Set(parsed.map(m => m.mark_id.toUpperCase()))
   const out: ImportDiff = { added: [], changed: [], removed: [], unchanged: [] }
@@ -74,10 +80,11 @@ export function diffMarks(parsed: ParsedMark[], existing: ExistingMark[]): Impor
   }
 
   for (const ex of existing) {
-    if (!paKeys.has(ex.mark_id.toUpperCase())) {
-      const hasWork = markHasWork(ex)
-      out.removed.push({ mark_id: ex.mark_id, kind: 'removed', existing: ex, hasWork, isProtected: hasWork || !!ex.manually_edited })
-    }
+    if (paKeys.has(ex.mark_id.toUpperCase())) continue
+    // Only flag as removed if this mark came from the report being re-imported.
+    if (sourceKey !== undefined && (ex.source_file ?? null) !== sourceKey) continue
+    const hasWork = markHasWork(ex)
+    out.removed.push({ mark_id: ex.mark_id, kind: 'removed', existing: ex, hasWork, isProtected: hasWork || !!ex.manually_edited })
   }
   return out
 }

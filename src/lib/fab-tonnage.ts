@@ -25,8 +25,9 @@ export function tonnageSummary(marks: TonnageMark[]): TonnageSummary {
   let missing = 0
   for (const mark of marks) {
     const qty = mark.quantity ?? 1
-    const kg = (mark.weight_kg ?? 0) * qty
-    if (!mark.weight_kg || mark.weight_kg <= 0) missing++
+    const w = (mark.weight_kg ?? 0) > 0 ? (mark.weight_kg as number) : 0 // clamp null/negative
+    if (w <= 0) missing++
+    const kg = w * qty
     total += kg
     if (MADE.has(mark.status)) made += kg
   }

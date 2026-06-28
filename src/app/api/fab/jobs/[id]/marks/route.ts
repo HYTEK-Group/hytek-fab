@@ -52,6 +52,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       weight_kg: body.weight_kg ?? null,
       quantity: body.quantity ?? 1,
       status: 'not_started',
+      source: 'manual',
+      manually_edited: true, // hand-entered → protected from auto-import overwrite
     }, { onConflict: 'fab_job_id,mark_id', ignoreDuplicates: false })
     .select()
     .single()
