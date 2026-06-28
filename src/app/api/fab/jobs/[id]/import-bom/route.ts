@@ -8,7 +8,7 @@ import * as XLSX from 'xlsx'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { getSupervisorCaller } from '@/lib/fab-auth'
 import { parseBomRows, bomCategoryFromFilename, type Row } from '@/lib/tekla-bom'
-import { stableSource } from '@/lib/source-key'
+import { stableSource, iffDate } from '@/lib/source-key'
 
 export const dynamic = 'force-dynamic'
 
@@ -38,9 +38,32 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const skipped: { file: string; reason: string }[] = []
   let totalLines = 0
 
-  for (const file of files) {
-    const category = bomCategoryFromFilename(file.name)
-    if (!category) { skipped.push({ file: file.name, reason: 'not a recognised BOM report' }); continue }
+  // Collapse duplicate issues of the SAME report present in one request (the
+  // bridge may collect superseded _IFF_ copies that all map to one source_file):
+  // keep the NEWEST by issue date, so the second issue can't silently overwrite
+  // the first and the totals reported to purchasing stay honest.
+  const recognised: File[] = []
+  for (const f of files) {
+    if (bomCategoryFromFilename(f.name)) recognised.push(f)
+    else skipped.push({ file: f.name, reason: 'not a recognised BOM report' })
+  }
+  const bySource = new Map<string, File[]>()
+  for (const f of recognised) {
+    const k = stableSource(f.name)
+    const arr = bySource.get(k); if (arr) arr.push(f); else bySource.set(k, [f])
+  }
+  const winners: File[] = []
+  for (const group of bySource.values()) {
+    if (group.length === 1) { winners.push(group[0]); continue }
+    const sorted = [...group].sort((a, b) => iffDate(b.name) - iffDate(a.name))
+    winners.push(sorted[0])
+    for (const loser of sorted.slice(1)) {
+      skipped.push({ file: loser.name, reason: `superseded by ${sorted[0].name} (same report, newer issue)` })
+    }
+  }
+
+  for (const file of winners) {
+    const category = bomCategoryFromFilename(file.name)!
 
     let lines
     try {
@@ -55,10 +78,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (!lines.length) { skipped.push({ file: file.name, reason: 'no rows parsed' }); continue }
 
     const sourceKey = stableSource(file.name)
-    // Idempotent: clear this report's prior rows for this job, then insert fresh.
-    await admin.from('job_bom').delete()
-      .eq('quote_number', job.quote_number).eq('source_file', sourceKey)
-
     const insertRows = lines.map(l => ({
       quote_number: job.quote_number,
       hubspot_deal_id: job.hubspot_deal_id,
@@ -74,8 +93,21 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       from_order: l.from_order,
       source_file: sourceKey,
     }))
-    const { error } = await admin.from('job_bom').insert(insertRows)
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+    // Idempotent replace WITHOUT an empty window: capture the report's prior rows,
+    // INSERT the new rows first, then delete only those prior rows. If the insert
+    // fails the old rows are untouched (job_bom never goes empty); a rare delete
+    // failure leaves brief duplicates the next run cleans up. A per-file failure is
+    // recorded and does NOT abort the remaining reports in this request.
+    const { data: prior } = await admin.from('job_bom').select('id')
+      .eq('quote_number', job.quote_number).eq('source_file', sourceKey)
+    const { error: insErr } = await admin.from('job_bom').insert(insertRows)
+    if (insErr) { skipped.push({ file: file.name, reason: 'db write failed: ' + insErr.message }); continue }
+    const priorIds = (prior ?? []).map(r => r.id as string)
+    if (priorIds.length) {
+      const { error: delErr } = await admin.from('job_bom').delete().in('id', priorIds)
+      if (delErr) console.error('job_bom: prior-row cleanup failed (self-heals next run):', delErr.message)
+    }
 
     reports.push({ file: file.name, category, lines: lines.length })
     totalLines += lines.length

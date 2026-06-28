@@ -71,6 +71,15 @@ describe('buildDispatchFeed', () => {
     expect(feed.map(j => j.quote_number)).toEqual(['C', 'B', 'A'])
   })
 
+  it('keeps an explicit quantity 0 as 0 (does not inflate to 1)', () => {
+    const feed = buildDispatchFeed(
+      [job({})], [load({ id: 'L1' })],
+      [mark({ mark_id: 'Z', weight_kg: 100, quantity: 0, dispatch_load_id: 'L1' })],
+    )
+    expect(feed[0].loads[0].marks[0].quantity).toBe(0)
+    expect(feed[0].loads[0].tonnes).toBe(0)
+  })
+
   it('clamps negative/null weights to 0 in tonnage', () => {
     const feed = buildDispatchFeed(
       [job({})], [load({ id: 'L1' })],

@@ -62,7 +62,8 @@ const toUnit = (m: DispatchFeedMark): DispatchUnit => ({
   mark_id: m.mark_id,
   section: m.section,
   weight_kg: m.weight_kg,
-  quantity: Math.max(1, Math.round(m.quantity ?? 1)),
+  // default null → 1, but keep an explicit 0 as 0 (don't inflate tonnage).
+  quantity: Math.max(0, Math.round(m.quantity ?? 1)),
 })
 
 const tonnesOf = (units: DispatchUnit[]): number =>

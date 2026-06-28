@@ -107,12 +107,21 @@ function findJobs(root) {
         }
       }
       walk(struct)
+      // Keep only the newest issue of each BOM report (drop superseded _IFF_ copies
+      // detailers leave in place) so we don't POST colliding issues. The endpoint
+      // also de-dupes, but this keeps the upload + logs honest.
+      const fileBase = (p) => p.split(/[\\/]/).pop()
+      const baseKey = (p) => fileBase(p).replace(/\.(xlsx|xls)$/i, '').replace(/_iff_\d{1,2}[.\-]\d{1,2}[.\-]\d{2,4}$/i, '').trim().toLowerCase()
+      const iffMs = (p) => { const m = fileBase(p).match(/_iff_(\d{1,2})[.\-](\d{1,2})[.\-](\d{2,4})/i); if (!m) return -1; const yy = m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3]); return new Date(yy, Number(m[2]) - 1, Number(m[1])).getTime() }
+      const bomBest = new Map()
+      for (const p of bomFiles) { const k = baseKey(p); const cur = bomBest.get(k); if (!cur || iffMs(p) > iffMs(cur)) bomBest.set(k, p) }
+      const dedupedBom = [...bomBest.values()]
       if (assemblies.length) {
         const m = jobDir.match(/\b(HG\d{6,})\b/i)
         jobs.push({
           jobNo: m ? m[1].toUpperCase() : jobDir,
           name: (jobDir.replace(/^HG\d+\s*/i, '').trim()) || jobDir,
-          customer, assemblies, bomFiles, drawings,
+          customer, assemblies, bomFiles: dedupedBom, drawings,
         })
       }
     }

@@ -55,6 +55,12 @@ const bool = (c: Cell): boolean | null => {
 const findCol = (header: Row, pred: (v: string) => boolean): number =>
   header.findIndex(c => pred(str(c).toLowerCase()))
 
+const tokens = (v: string): string[] => v.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean)
+const qtyCell = (v: string): boolean => {
+  const t = tokens(v)
+  return t.includes('qty') || t.includes('quantity') || t.includes('count') || t.includes('pieces') || v.includes('no off')
+}
+
 /** Map a report filename to its job_bom category. null = not a BOM report. */
 export function bomCategoryFromFilename(name: string): BomCategory | null {
   const n = name.toLowerCase()
@@ -68,19 +74,35 @@ export function bomCategoryFromFilename(name: string): BomCategory | null {
   return null
 }
 
-/** Is this header row the column header (vs a title/blank row)? Needs ≥2 known columns. */
-function looksLikeHeader(row: Row): boolean {
-  const cells = row.map(c => str(c).toLowerCase())
-  let hits = 0
-  for (const v of cells) {
-    if (
-      v.includes('mark') || v.includes('profile') || v.includes('section') ||
-      v === 'qty' || v.includes('quantity') || v.includes('weight') ||
-      v.includes('length') || v.includes('dia') || v.includes('grade') ||
-      v.includes('material') || v.includes('size')
-    ) hits++
+/** Does a cell look like a recognised BOM COLUMN header? Token-based (whole words)
+ *  so a title row like "Diaphragm plate" doesn't match 'dia'/'plate' as a column. */
+function cellIsColumn(v: string): boolean {
+  const t = tokens(v)
+  const has = (w: string) => t.includes(w)
+  if (v.includes('part mark') || has('mark')) return true
+  if (has('profile') || has('section') || has('size')) return true
+  if (qtyCell(v)) return true
+  if (has('weight')) return true
+  if (has('length')) return true
+  if (has('dia') || has('diameter')) return true
+  if (has('grade') || has('material')) return true
+  return false
+}
+
+/** How many recognised column cells a row has (its "header-ness" score). */
+function scoreHeader(row: Row): number {
+  return row.reduce<number>((n, c) => n + (cellIsColumn(str(c)) ? 1 : 0), 0)
+}
+
+/** The BEST header row index (max recognised columns, ≥2), earliest on a tie —
+ *  so a title row that happens to share one keyword can't hijack detection. */
+function headerRowIndex(rows: Row[]): number {
+  let best = -1, bestScore = 1 // require ≥2 to beat this
+  for (let i = 0; i < rows.length; i++) {
+    const s = scoreHeader(rows[i])
+    if (s > bestScore) { bestScore = s; best = i }
   }
-  return hits >= 2
+  return best
 }
 
 export interface ParsedBom {
@@ -89,7 +111,7 @@ export interface ParsedBom {
 }
 
 export function parseBomRows(rows: Row[], category: BomCategory): ParsedBom {
-  const h = rows.findIndex(looksLikeHeader)
+  const h = headerRowIndex(rows)
   if (h === -1) return { category, lines: [] }
 
   const header = rows[h]
@@ -101,26 +123,26 @@ export function parseBomRows(rows: Row[], category: BomCategory): ParsedBom {
   if (profileCol === -1) profileCol = findCol(header, v => v.includes('dia'))
   const gradeCol = findCol(header, v => v.includes('grade') || v.includes('material'))
   const lengthCol = findCol(header, v => v.includes('length'))
-  const qtyCol = findCol(header, v => v === 'qty' || v.includes('quantity') || v === 'no' || v === 'no.')
+  const qtyCol = findCol(header, qtyCell)
   const stockCol = findCol(header, v => v.includes('stock'))
   const orderCol = findCol(header, v => v.includes('from order') || v === 'order' || v === 'to order')
 
-  // Two weight columns (one / all) — prefer the per-one column.
+  // Weight: prefer the PER-ONE column (one/each/unit). Never default to an
+  // all-up/total column when a non-total weight column exists — storing the
+  // all-up weight as weight_kg (per one) would inflate the BOM.
   const weightCols = header
     .map((c, i) => ({ i, v: str(c).toLowerCase() }))
     .filter(x => x.v.includes('weight'))
     .map(x => x.i)
-  let weightOneCol = weightCols.length ? weightCols[0] : -1
-  for (const i of weightCols) {
-    const label = (str(header[i]) + ' ' + str(sub[i])).toLowerCase()
-    if (label.includes('one')) { weightOneCol = i; break }
-  }
+  const wLabel = (i: number) => (str(header[i]) + ' ' + str(sub[i])).toLowerCase()
+  let weightOneCol = weightCols.find(i => /\b(one|each|unit)\b/.test(wLabel(i))) ?? -1
+  if (weightOneCol === -1) weightOneCol = weightCols.find(i => !/\b(all|total)\b/.test(wLabel(i))) ?? weightCols[0] ?? -1
 
   const lines: BomLine[] = []
   // Data starts after the header; if the sub-row is a continuation header (no
   // numeric/identifier content under the key columns), skip it too.
   let start = h + 1
-  const subIsHeader = looksLikeHeader(sub) || (markCol >= 0 && str(sub[markCol]) === '' && qtyCol >= 0 && num(sub[qtyCol]) === null)
+  const subIsHeader = scoreHeader(sub) >= 2 || (markCol >= 0 && str(sub[markCol]) === '' && qtyCol >= 0 && num(sub[qtyCol]) === null)
   if (subIsHeader) start = h + 2
 
   for (let i = start; i < rows.length; i++) {

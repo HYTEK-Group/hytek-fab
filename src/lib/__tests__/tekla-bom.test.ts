@@ -83,3 +83,43 @@ describe('parseBomRows — robustness', () => {
     expect(parseBomRows(rows, 'section').lines).toHaveLength(1)
   })
 })
+
+describe('parseBomRows — header detection (hardened)', () => {
+  it('ignores a title row that only shares keyword substrings (Diaphragm/Material)', () => {
+    const rows: Row[] = [
+      ['Diaphragm plate stiffeners', 'Material spec note'], // 'dia'/'plate' are substrings, not columns
+      ['Part Mark', 'Profile', 'Qty', 'Weight (kg)'],
+      ['P1', 'PFC150', 1, 85],
+    ]
+    const { lines } = parseBomRows(rows, 'section')
+    expect(lines).toHaveLength(1)
+    expect(lines[0]).toMatchObject({ part_mark: 'P1', profile: 'PFC150', qty: 1, weight_kg: 85 })
+  })
+
+  it('picks the BEST header row (most columns), not the first that merely scores 2', () => {
+    const rows: Row[] = [
+      ['Section A', 'Material list'], // scores 2 (section + material) but is a title
+      ['Part Mark', 'Profile', 'Grade', 'Qty', 'Weight (kg)'], // the real header, scores 5
+      ['P1', 'PFC150', 'G300', 2, 85],
+    ]
+    const { lines } = parseBomRows(rows, 'section')
+    expect(lines).toHaveLength(1)
+    expect(lines[0]).toMatchObject({ part_mark: 'P1', grade: 'G300', qty: 2, weight_kg: 85 })
+  })
+
+  it('does not mistake a row-number "No." column for qty', () => {
+    const rows: Row[] = [
+      ['No.', 'Part Mark', 'Qty', 'Weight (kg)'],
+      [1, 'P1', 3, 85],
+    ]
+    expect(parseBomRows(rows, 'section').lines[0].qty).toBe(3)
+  })
+
+  it('prefers the per-one weight column over the all-up column', () => {
+    const rows: Row[] = [
+      ['Part Mark', 'Weight (kg) for all', 'Weight (kg) for one'],
+      ['P1', 200, 100],
+    ]
+    expect(parseBomRows(rows, 'section').lines[0].weight_kg).toBe(100)
+  })
+})

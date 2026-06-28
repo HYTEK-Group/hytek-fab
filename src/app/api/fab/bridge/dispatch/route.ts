@@ -17,6 +17,24 @@ import {
 
 export const dynamic = 'force-dynamic'
 
+type Page<T> = { data: T[] | null; error: { message: string } | null }
+
+/** Read every row, paging past PostgREST's default max-rows cap (≈1000) so a
+ *  large shop history can't silently truncate the feed. Caller supplies a stable
+ *  order in `make` so pages don't drop/duplicate rows. */
+async function pageAll<T>(make: (from: number, to: number) => PromiseLike<Page<T>>): Promise<T[]> {
+  const SIZE = 1000
+  const out: T[] = []
+  for (let from = 0; ; from += SIZE) {
+    const { data, error } = await make(from, from + SIZE - 1)
+    if (error) throw new Error(error.message)
+    const batch = data ?? []
+    out.push(...batch)
+    if (batch.length < SIZE) break
+  }
+  return out
+}
+
 export async function GET(req: NextRequest) {
   const token = process.env.FAB_BRIDGE_TOKEN
   if (!token) {
@@ -29,28 +47,30 @@ export async function GET(req: NextRequest) {
   }
 
   const admin = getSupabaseAdmin()
-  const { data: jobs, error } = await admin
-    .from('fab_jobs')
-    .select('id, quote_number, hubspot_deal_id, name, on_site_date, dispatch_requested_at')
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  let jobs: DispatchFeedJob[], loads: DispatchFeedLoad[], marks: DispatchFeedMark[]
+  try {
+    // Active jobs only — drop fully-dispatched history (keeps the working set,
+    // and the marks query below, well under the row cap).
+    jobs = await pageAll<DispatchFeedJob>((f, t) => admin.from('fab_jobs')
+      .select('id, quote_number, hubspot_deal_id, name, on_site_date, dispatch_requested_at')
+      .neq('status', 'dispatched')
+      .order('id').range(f, t))
+    const jobIds = jobs.map(j => j.id)
+    if (jobIds.length === 0) return NextResponse.json({ configured: true, jobs: [] })
 
-  const jobIds = (jobs ?? []).map(j => j.id)
-  if (jobIds.length === 0) return NextResponse.json({ configured: true, jobs: [] })
+    ;[loads, marks] = await Promise.all([
+      pageAll<DispatchFeedLoad>((f, t) => admin.from('fab_dispatch_loads')
+        .select('id, fab_job_id, load_number, description, planned_date, dispatched_at, driver')
+        .in('fab_job_id', jobIds).order('id').range(f, t)),
+      pageAll<DispatchFeedMark>((f, t) => admin.from('fab_marks')
+        .select('fab_job_id, mark_id, section, weight_kg, quantity, status, dispatch_load_id')
+        .in('fab_job_id', jobIds).order('fab_job_id').order('mark_id').range(f, t)),
+    ])
+  } catch (e) {
+    return NextResponse.json({ error: (e as Error).message }, { status: 500 })
+  }
 
-  const [{ data: loads }, { data: marks }] = await Promise.all([
-    admin.from('fab_dispatch_loads')
-      .select('id, fab_job_id, load_number, description, planned_date, dispatched_at, driver')
-      .in('fab_job_id', jobIds),
-    admin.from('fab_marks')
-      .select('fab_job_id, mark_id, section, weight_kg, quantity, status, dispatch_load_id')
-      .in('fab_job_id', jobIds),
-  ])
-
-  const feed = buildDispatchFeed(
-    (jobs ?? []) as DispatchFeedJob[],
-    (loads ?? []) as DispatchFeedLoad[],
-    (marks ?? []) as DispatchFeedMark[],
-  )
+  const feed = buildDispatchFeed(jobs, loads, marks)
 
   return NextResponse.json({ configured: true, jobs: feed })
 }
