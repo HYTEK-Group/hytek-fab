@@ -1,9 +1,9 @@
 -- =====================================================================
 -- HYTEK Fab — 004: SS ingest from detailing (Tekla IFF reports)
 -- =====================================================================
--- Target: SHARED OPS project (gqtikzguvhukpujyxkey)
+-- Target: SHARED OPS project (gqtikzguvhukpujyxkez)
 -- Apply BY HAND in Supabase SQL editor — run scripts/whichdb.mjs first
--- and confirm the project ref in the editor URL is gqtikzguvhukpujyxkey.
+-- and confirm the project ref in the editor URL is gqtikzguvhukpujyxkez.
 --
 -- Idempotent. Additive only. Scoped to fab_* / flow_fab_progress / job_bom.
 
