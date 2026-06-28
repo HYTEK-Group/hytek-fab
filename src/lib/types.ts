@@ -55,6 +55,8 @@ export interface FabTask {
   description: string
   assigned_to: string | null
   status: TaskStatus
+  estimated_hours: number | null  // allotted hours (supervisor's expectation)
+  due_on: string | null           // target date
   created_by: string
   completed_at: string | null
   created_at: string

@@ -24,55 +24,99 @@ interface JobDetail extends FabJob {
 
 interface Drawing { name: string; url: string; size?: number }
 
-// ── Tasks ────────────────────────────────────────────────────────────────────
+// ── Tasks (+ productivity matrix) ────────────────────────────────────────────
+type MatrixTask = FabTask & {
+  actual_hours?: number
+  tonnes?: number
+  variance_hours?: number | null
+  tonnes_per_hour?: number | null
+  linked_marks?: number
+}
+interface MatrixTotals { total_estimated: number; total_actual: number; total_tonnes: number; tonnes_per_hour: number | null }
+
 function TasksTab({ jobId, token, role }: { jobId: string; token: string; role: string }) {
-  const [tasks, setTasks] = useState<FabTask[]>([])
-  const [desc, setDesc] = useState('')
+  const isSup = role === 'admin' || role === 'supervisor'
+  const [tasks, setTasks] = useState<MatrixTask[]>([])
+  const [totals, setTotals] = useState<MatrixTotals | null>(null)
+  const [marks, setMarks] = useState<FabMark[]>([])
+  const [form, setForm] = useState({ desc: '', est: '', due: '' })
   const [adding, setAdding] = useState(false)
+  const [openTask, setOpenTask] = useState<string | null>(null)
+  const [assigned, setAssigned] = useState<Set<string>>(new Set())
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/fab/jobs/${jobId}/tasks`, { headers: { Authorization: `Bearer ${token}` } })
-    if (res.ok) setTasks((await res.json()).tasks ?? [])
+    if (res.ok) { const j = await res.json(); setTasks(j.tasks ?? []); setTotals(j.matrix_totals ?? null) }
+  }, [jobId, token])
+  const loadMarks = useCallback(async () => {
+    const res = await fetch(`/api/fab/jobs/${jobId}/marks`, { headers: { Authorization: `Bearer ${token}` } })
+    if (res.ok) setMarks((await res.json()).marks ?? [])
   }, [jobId, token])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { load(); loadMarks() }, [load, loadMarks])
 
   async function addTask() {
-    if (!desc.trim()) return
+    if (!form.desc.trim()) return
     setAdding(true)
     await fetch(`/api/fab/jobs/${jobId}/tasks`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ description: desc.trim() }),
+      method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ description: form.desc.trim(), estimated_hours: form.est ? parseFloat(form.est) : null, due_on: form.due || null }),
     })
-    setDesc('')
-    setAdding(false)
-    load()
+    setForm({ desc: '', est: '', due: '' }); setAdding(false); load()
   }
-
-  async function updateTask(id: string, patch: Partial<FabTask>) {
+  async function updateTask(id: string, patch: Record<string, unknown>) {
     await fetch(`/api/fab/jobs/${jobId}/tasks/${id}`, {
-      method: 'PATCH',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      method: 'PATCH', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(patch),
     })
     load()
   }
+  async function openAssign(taskId: string) {
+    if (openTask === taskId) { setOpenTask(null); return }
+    const res = await fetch(`/api/fab/jobs/${jobId}/tasks/${taskId}/marks`, { headers: { Authorization: `Bearer ${token}` } })
+    setAssigned(new Set(res.ok ? (await res.json()).mark_ids : []))
+    setOpenTask(taskId)
+  }
+  async function toggleMark(taskId: string, markId: string) {
+    const has = assigned.has(markId)
+    await fetch(`/api/fab/jobs/${jobId}/tasks/${taskId}/marks`, {
+      method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(has ? { remove: [markId] } : { add: [markId] }),
+    })
+    setAssigned(prev => { const n = new Set(prev); has ? n.delete(markId) : n.add(markId); return n })
+    load()
+  }
 
   const STATUSES: FabTask['status'][] = ['open', 'in_progress', 'done']
-  const statusColor = (s: FabTask['status']) =>
-    s === 'done' ? '#97C459' : s === 'in_progress' ? '#FFCB05' : '#555'
+  const statusColor = (s: FabTask['status']) => s === 'done' ? '#97C459' : s === 'in_progress' ? '#FFCB05' : '#555'
+  const hrs = (n: number | null | undefined) => n == null ? '—' : `${n}h`
 
   return (
     <div>
-      {(role === 'admin' || role === 'supervisor') && (
-        <div className="flex gap-2 mb-4">
-          <input placeholder="New task description…" value={desc} onChange={e => setDesc(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && addTask()} className="flex-1" />
-          <button onClick={addTask} disabled={adding || !desc.trim()} className="px-4 rounded-lg text-sm font-medium"
-            style={{ background: '#FFCB05', color: '#231F20', border: 'none', opacity: adding || !desc.trim() ? .5 : 1 }}>
-            Add
-          </button>
+      {/* Matrix totals */}
+      {totals && (
+        <div className="rounded-xl p-3 mb-3 grid grid-cols-4 gap-2 text-center" style={{ background: '#232326', border: '0.5px solid #2a2a2a' }}>
+          {[
+            { l: 'Allotted', v: `${totals.total_estimated}h` },
+            { l: 'Actual', v: `${totals.total_actual}h` },
+            { l: 'Tonnes', v: `${totals.total_tonnes}t` },
+            { l: 't / hr', v: totals.tonnes_per_hour ?? '—' },
+          ].map(s => (
+            <div key={s.l}><p className="text-xs" style={{ color: '#555' }}>{s.l}</p><p className="text-sm font-medium" style={{ color: '#FFCB05' }}>{s.v}</p></div>
+          ))}
+        </div>
+      )}
+
+      {isSup && (
+        <div className="rounded-xl p-3 mb-3" style={{ background: '#232326', border: '0.5px solid #2a2a2a' }}>
+          <p className="text-xs mb-2" style={{ color: '#555' }}>Add task (break the job down — allot hours + a due date)</p>
+          <div className="flex gap-2 flex-wrap items-center">
+            <input placeholder="Task description…" value={form.desc} onChange={e => setForm(f => ({ ...f, desc: e.target.value }))} className="flex-1" style={{ minWidth: 160 }} />
+            <input type="number" min="0" step="0.5" placeholder="Allotted h" value={form.est} onChange={e => setForm(f => ({ ...f, est: e.target.value }))} style={{ width: 100 }} />
+            <input type="date" value={form.due} onChange={e => setForm(f => ({ ...f, due: e.target.value }))} style={{ width: 150 }} />
+            <button onClick={addTask} disabled={adding || !form.desc.trim()} className="px-4 rounded-lg text-sm font-medium"
+              style={{ background: '#FFCB05', color: '#231F20', border: 'none', opacity: adding || !form.desc.trim() ? .5 : 1 }}>Add</button>
+          </div>
         </div>
       )}
 
@@ -82,31 +126,56 @@ function TasksTab({ jobId, token, role }: { jobId: string; token: string; role: 
         {tasks.map(task => (
           <div key={task.id} className="rounded-xl p-3" style={{ background: '#232326', border: '0.5px solid #2a2a2a' }}>
             <div className="flex justify-between items-start gap-2 mb-2">
-              <p className="text-sm" style={{ color: task.status === 'done' ? '#555' : '#fff', textDecoration: task.status === 'done' ? 'line-through' : 'none' }}>
-                {task.description}
-              </p>
+              <p className="text-sm" style={{ color: task.status === 'done' ? '#555' : '#fff', textDecoration: task.status === 'done' ? 'line-through' : 'none' }}>{task.description}</p>
               <div className="flex gap-1 flex-shrink-0">
                 {STATUSES.map(s => (
-                  <button key={s} onClick={() => updateTask(task.id, { status: s })}
-                    className="text-xs px-2 py-0.5 rounded-full"
-                    style={{
-                      background: task.status === s ? (s === 'done' ? 'rgba(99,153,34,.2)' : s === 'in_progress' ? 'rgba(255,203,5,.15)' : '#2a2a2a') : 'transparent',
-                      color: task.status === s ? statusColor(s) : '#444',
-                      border: `0.5px solid ${task.status === s ? statusColor(s) : '#333'}`,
-                    }}>
+                  <button key={s} onClick={() => updateTask(task.id, { status: s })} className="text-xs px-2 py-0.5 rounded-full"
+                    style={{ background: task.status === s ? (s === 'done' ? 'rgba(99,153,34,.2)' : s === 'in_progress' ? 'rgba(255,203,5,.15)' : '#2a2a2a') : 'transparent', color: task.status === s ? statusColor(s) : '#444', border: `0.5px solid ${task.status === s ? statusColor(s) : '#333'}` }}>
                     {s === 'in_progress' ? 'WIP' : s}
                   </button>
                 ))}
               </div>
             </div>
-            <div className="flex justify-between items-center">
-              <input placeholder="Assign to…" defaultValue={task.assigned_to ?? ''}
-                onBlur={e => { if (e.target.value !== (task.assigned_to ?? '')) updateTask(task.id, { assigned_to: e.target.value || null as unknown as string }) }}
-                className="text-xs w-40" style={{ background: 'transparent', border: '0.5px solid #2a2a2a', borderRadius: '6px', padding: '3px 6px', color: '#777' }} />
-              {task.completed_at && (
-                <span className="text-xs" style={{ color: '#555' }}>Done {task.completed_at.slice(0, 10)}</span>
+
+            {/* Matrix row */}
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs mb-2" style={{ color: '#888' }}>
+              <span>Allotted {hrs(task.estimated_hours)}</span>
+              <span>Actual {task.actual_hours ?? 0}h</span>
+              {task.variance_hours != null && (
+                <span style={{ color: task.variance_hours > 0 ? '#F2A65A' : '#97C459' }}>
+                  {task.variance_hours > 0 ? `+${task.variance_hours}h over` : `${Math.abs(task.variance_hours)}h under`}
+                </span>
               )}
+              <span>{task.tonnes ?? 0}t</span>
+              <span style={{ color: '#FFCB05' }}>{task.tonnes_per_hour != null ? `${task.tonnes_per_hour} t/hr` : '—'}</span>
+              {task.due_on && <span>due {task.due_on}</span>}
             </div>
+
+            <div className="flex justify-between items-center gap-2">
+              <input placeholder="Assign worker…" defaultValue={task.assigned_to ?? ''}
+                onBlur={e => { if (e.target.value !== (task.assigned_to ?? '')) updateTask(task.id, { assigned_to: e.target.value || null }) }}
+                className="text-xs" style={{ width: 140, background: 'transparent', border: '0.5px solid #2a2a2a', borderRadius: 6, padding: '3px 6px', color: '#777' }} />
+              {isSup && (
+                <input type="number" min="0" step="0.5" placeholder="allot h" defaultValue={task.estimated_hours ?? ''}
+                  onBlur={e => { const v = e.target.value === '' ? null : parseFloat(e.target.value); if (v !== (task.estimated_hours ?? null)) updateTask(task.id, { estimated_hours: v }) }}
+                  className="text-xs" style={{ width: 70, background: 'transparent', border: '0.5px solid #2a2a2a', borderRadius: 6, padding: '3px 6px', color: '#777' }} />
+              )}
+              <button onClick={() => openAssign(task.id)} className="text-xs" style={{ color: '#85B7EB', background: 'none', border: 'none', cursor: 'pointer' }}>
+                marks ({task.linked_marks ?? 0}) {openTask === task.id ? '▾' : '▸'}
+              </button>
+            </div>
+
+            {openTask === task.id && (
+              <div className="mt-2 flex flex-wrap gap-1">
+                {marks.length === 0 && <span className="text-xs" style={{ color: '#555' }}>No marks on this job yet.</span>}
+                {marks.map(m => (
+                  <button key={m.id} onClick={() => toggleMark(task.id, m.id)} className="text-xs px-2 py-0.5 rounded-full"
+                    style={{ background: assigned.has(m.id) ? 'rgba(133,183,235,.15)' : 'transparent', border: `0.5px solid ${assigned.has(m.id) ? '#85B7EB' : '#2a2a2a'}`, color: assigned.has(m.id) ? '#85B7EB' : '#888' }}>
+                    {m.mark_id}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         ))}
       </div>
@@ -625,12 +694,17 @@ function DispatchTab({ jobId, token }: { jobId: string; token: string }) {
 // ── Time log ──────────────────────────────────────────────────────────────────
 function TimeLogTab({ jobId, token }: { jobId: string; token: string }) {
   const [entries, setEntries] = useState<FabTimeEntry[]>([])
-  const [form, setForm] = useState({ worker_name: '', hours: '', work_date: new Date().toISOString().slice(0, 10), note: '' })
+  const [tasks, setTasks] = useState<{ id: string; description: string }[]>([])
+  const [form, setForm] = useState({ worker_name: '', hours: '', work_date: new Date().toISOString().slice(0, 10), note: '', task_id: '' })
   const [saving, setSaving] = useState(false)
 
   const load = useCallback(async () => {
-    const res = await fetch(`/api/fab/jobs/${jobId}/time-log`, { headers: { Authorization: `Bearer ${token}` } })
-    if (res.ok) setEntries((await res.json()).entries ?? [])
+    const [eRes, tRes] = await Promise.all([
+      fetch(`/api/fab/jobs/${jobId}/time-log`, { headers: { Authorization: `Bearer ${token}` } }),
+      fetch(`/api/fab/jobs/${jobId}/tasks`, { headers: { Authorization: `Bearer ${token}` } }),
+    ])
+    if (eRes.ok) setEntries((await eRes.json()).entries ?? [])
+    if (tRes.ok) setTasks(((await tRes.json()).tasks ?? []).map((t: { id: string; description: string }) => ({ id: t.id, description: t.description })))
   }, [jobId, token])
 
   useEffect(() => { load() }, [load])
@@ -641,9 +715,9 @@ function TimeLogTab({ jobId, token }: { jobId: string; token: string }) {
     await fetch(`/api/fab/jobs/${jobId}/time-log`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ worker_name: form.worker_name.trim(), hours: parseFloat(form.hours), work_date: form.work_date, note: form.note.trim() || null }),
+      body: JSON.stringify({ worker_name: form.worker_name.trim(), hours: parseFloat(form.hours), work_date: form.work_date, note: form.note.trim() || null, task_id: form.task_id || null }),
     })
-    setForm(f => ({ ...f, worker_name: '', hours: '', note: '' }))
+    setForm(f => ({ ...f, worker_name: '', hours: '', note: '', task_id: '' }))
     setSaving(false)
     load()
   }
@@ -662,6 +736,13 @@ function TimeLogTab({ jobId, token }: { jobId: string; token: string }) {
             <input type="date" value={form.work_date} onChange={e => setForm(f => ({ ...f, work_date: e.target.value }))} /></div>
           <div><label className="text-xs block mb-1" style={{ color: '#555' }}>Note</label>
             <input placeholder="Optional" value={form.note} onChange={e => setForm(f => ({ ...f, note: e.target.value }))} /></div>
+        </div>
+        <div className="mb-2">
+          <label className="text-xs block mb-1" style={{ color: '#555' }}>Task (optional — attributes the hours to the productivity matrix)</label>
+          <select value={form.task_id} onChange={e => setForm(f => ({ ...f, task_id: e.target.value }))} className="w-full">
+            <option value="">— general job time —</option>
+            {tasks.map(t => <option key={t.id} value={t.id}>{t.description}</option>)}
+          </select>
         </div>
         <button onClick={addEntry} disabled={saving || !form.worker_name.trim() || !parseFloat(form.hours)}
           className="w-full rounded-lg text-sm font-medium"
