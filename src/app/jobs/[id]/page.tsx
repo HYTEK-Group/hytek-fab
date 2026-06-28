@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback, use } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/auth-context'
 import { AppShell } from '@/components/app-shell'
 import { supabase } from '@/lib/supabase'
@@ -696,8 +696,11 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
   const { id } = use(params)
   const { user, loading } = useAuth()
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const validTabs: Tab[] = ['tasks', 'marks', 'drawings', 'packages', 'qc', 'dispatch', 'timelog']
+  const tabParam = searchParams.get('tab') as Tab | null
   const [job, setJob] = useState<JobDetail | null>(null)
-  const [tab, setTab] = useState<Tab>('tasks')
+  const [tab, setTab] = useState<Tab>(tabParam && validTabs.includes(tabParam) ? tabParam : 'tasks')
   const [token, setToken] = useState('')
   const [role, setRole] = useState('fabricator')
   const [dispatching, setDispatching] = useState(false)

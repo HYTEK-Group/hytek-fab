@@ -6,6 +6,7 @@ import Image from 'next/image'
 import { useAuth } from '@/lib/auth-context'
 
 const NAV = [
+  { href: '/action', label: 'Action', icon: '◎' },
   { href: '/shop',   label: 'Shop',   icon: '⊞' },
   { href: '/ready',  label: 'Ready',  icon: '☑' },
   { href: '/crew',   label: 'Crew',   icon: '⊕' },
