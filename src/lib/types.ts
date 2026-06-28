@@ -260,6 +260,10 @@ export interface FabProgressRow {
   inhouse_total: number
   inhouse_complete: number
   rework_total: number
+  /** Σ weight×qty of all marks, in tonnes (Hub feed). */
+  tonnes_total: number
+  /** Σ weight×qty of QC-passed marks, in tonnes (Hub "complete"). */
+  tonnes_complete: number
   contractor_packages: FabProgressPackageSummary[]
   dispatch_loads: FabProgressLoadSummary[]
   narrative: string

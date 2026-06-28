@@ -14,7 +14,8 @@ ALTER TABLE public.fab_marks
   ADD COLUMN IF NOT EXISTS source_file     text,
   ADD COLUMN IF NOT EXISTS source_hash     text,
   ADD COLUMN IF NOT EXISTS manually_edited boolean NOT NULL DEFAULT false,
-  ADD COLUMN IF NOT EXISTS cut_length_mm   integer;
+  ADD COLUMN IF NOT EXISTS cut_length_mm   integer,
+  ADD COLUMN IF NOT EXISTS coating         text;     -- Tekla "Assembly Coating" (drives treatment later)
 
 -- ── fab_import_batches: one row per imported report set (audit + re-issue) ───
 CREATE TABLE IF NOT EXISTS public.fab_import_batches (
