@@ -15,7 +15,12 @@ export async function PATCH(
   if (!caller) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { id, tid } = await params
 
-  const body = (await req.json()) as { status?: TaskStatus; assigned_to?: string | null }
+  const body = (await req.json()) as {
+    status?: TaskStatus
+    assigned_to?: string | null
+    estimated_hours?: number | null
+    due_on?: string | null
+  }
 
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
   if (body.status) {
@@ -28,6 +33,8 @@ export async function PATCH(
     if (body.status !== 'done') patch.completed_at = null
   }
   if ('assigned_to' in body) patch.assigned_to = body.assigned_to
+  if ('estimated_hours' in body) patch.estimated_hours = body.estimated_hours
+  if ('due_on' in body) patch.due_on = body.due_on
 
   const admin = getSupabaseAdmin()
   const { data, error } = await admin
