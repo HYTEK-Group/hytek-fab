@@ -6,3 +6,6 @@ node_modules/
 
 
 .vercel
+
+# Claude Code local worktrees/state
+.claude/
