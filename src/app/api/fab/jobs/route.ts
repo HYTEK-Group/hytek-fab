@@ -6,6 +6,7 @@ import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { requireFabSupervisor } from '@/lib/get-fab-user'
 import { getUserCaller } from '@/lib/fab-auth'
 import { tonnageSummary } from '@/lib/fab-tonnage'
+import { jobActionSummary } from '@/lib/fab-action-centre'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,8 +21,8 @@ export async function GET(req: NextRequest) {
       *,
       fab_tasks(id, status),
       fab_time_entries(hours),
-      fab_marks(id, status, weight_kg, quantity),
-      fab_contractor_packages(id, status, package_type)
+      fab_marks(id, status, weight_kg, quantity, dispatch_load_id),
+      fab_contractor_packages(id, status, package_type, expected_return_date)
     `)
     .order('created_at', { ascending: false })
 
@@ -30,10 +31,11 @@ export async function GET(req: NextRequest) {
   // Summarise nested arrays into counts
   const jobs = (data ?? []).map((j: Record<string, unknown>) => {
     const tasks = (j.fab_tasks as Array<{ id: string; status: string }>) ?? []
-    const marks = (j.fab_marks as Array<{ id: string; status: string; weight_kg: number | null; quantity: number | null }>) ?? []
+    const marks = (j.fab_marks as Array<{ id: string; status: string; weight_kg: number | null; quantity: number | null; dispatch_load_id: string | null }>) ?? []
     const timeEntries = (j.fab_time_entries as Array<{ hours: number }>) ?? []
-    const packages = (j.fab_contractor_packages as Array<{ id: string; status: string; package_type: string }>) ?? []
+    const packages = (j.fab_contractor_packages as Array<{ id: string; status: string; package_type: string; expected_return_date: string | null }>) ?? []
     const tonnage = tonnageSummary(marks)
+    const action = jobActionSummary(marks, packages, new Date().toISOString().slice(0, 10))
     return {
       ...j,
       fab_tasks: undefined,
@@ -51,6 +53,11 @@ export async function GET(req: NextRequest) {
       made_kg: tonnage.made_kg,
       tonnage_pct: tonnage.pct,
       marks_missing_weight: tonnage.missing_weight,
+      // Action Centre rollups (cross-job "what needs me").
+      qc_waiting: action.qc_waiting,
+      dispatch_ready: action.dispatch_ready,
+      packages_out: action.packages_out,
+      packages_overdue: action.packages_overdue,
     }
   })
 
