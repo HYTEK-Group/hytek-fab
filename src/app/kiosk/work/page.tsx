@@ -5,8 +5,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 
-const YELLOW = '#FFCB05'
-const BLACK = '#231F20'
 const IDLE_MS = 30 * 60 * 1000
 
 interface Session { worker_name: string; role: string; token: string; signed_in_at: number }
@@ -88,7 +86,7 @@ export default function KioskWorkPage() {
   return (
     <main style={shell}>
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <h1 style={{ color: YELLOW, margin: 0 }}>Hi {session?.worker_name}</h1>
+        <h1 style={{ color: 'var(--foreground)', fontWeight: 700, margin: 0 }}>Hi {session?.worker_name}</h1>
         <button onClick={signOut} style={signOutBtn}>Sign out</button>
       </header>
 
@@ -124,19 +122,19 @@ export default function KioskWorkPage() {
 }
 
 const shell: React.CSSProperties = {
-  minHeight: '100vh', background: BLACK, color: '#fff', padding: 24,
+  minHeight: '100vh', background: 'var(--background)', color: 'var(--foreground)', padding: 24,
   fontFamily: 'system-ui, sans-serif',
 }
-const sectionHead: React.CSSProperties = { color: YELLOW, fontSize: 18, marginBottom: 12 }
+const sectionHead: React.CSSProperties = { color: 'var(--foreground)', fontWeight: 700, fontSize: 18, marginBottom: 12 }
 const card: React.CSSProperties = {
   display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-  background: '#2c2826', borderRadius: 12, padding: 16, marginBottom: 12,
+  background: 'var(--surface)', borderRadius: 12, padding: 16, marginBottom: 12,
 }
 const doneBtn: React.CSSProperties = {
-  background: YELLOW, color: BLACK, border: 'none', borderRadius: 10,
+  background: 'var(--hytek-yellow)', color: 'var(--on-brand)', border: 'none', borderRadius: 10,
   padding: '12px 24px', fontSize: 16, fontWeight: 700, cursor: 'pointer',
 }
 const signOutBtn: React.CSSProperties = {
-  background: 'transparent', color: '#fff', border: '1px solid #555',
+  background: 'transparent', color: 'var(--foreground)', border: '1px solid var(--border)',
   borderRadius: 10, padding: '8px 16px', cursor: 'pointer',
 }

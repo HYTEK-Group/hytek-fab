@@ -4,8 +4,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 
-const YELLOW = '#FFCB05'
-const BLACK = '#231F20'
+const YELLOW = 'var(--hytek-yellow)'
 
 export default function KioskPinPage() {
   const router = useRouter()
@@ -52,11 +51,11 @@ export default function KioskPinPage() {
 
   return (
     <main style={{
-      minHeight: '100vh', background: BLACK, color: '#fff',
+      minHeight: '100vh', background: 'var(--background)', color: 'var(--foreground)',
       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
       fontFamily: 'system-ui, sans-serif',
     }}>
-      <h1 style={{ color: YELLOW, marginBottom: 8 }}>HYTEK Fab</h1>
+      <h1 style={{ color: 'var(--foreground)', fontWeight: 700, marginBottom: 8 }}>HYTEK Fab</h1>
       <p style={{ opacity: 0.7, marginBottom: 24 }}>Enter your PIN</p>
       <div style={{ display: 'flex', gap: 12, marginBottom: 24 }}>
         {[0, 1, 2, 3].map(i => (
@@ -67,7 +66,7 @@ export default function KioskPinPage() {
           }} />
         ))}
       </div>
-      {error && <p style={{ color: '#ff6b6b', marginBottom: 16 }}>{error}</p>}
+      {error && <p style={{ color: 'var(--danger)', marginBottom: 16 }}>{error}</p>}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 80px)', gap: 12 }}>
         {['1','2','3','4','5','6','7','8','9'].map(d => (
           <button key={d} disabled={busy} onClick={() => onDigit(d)} style={keyStyle}>{d}</button>
@@ -82,5 +81,5 @@ export default function KioskPinPage() {
 
 const keyStyle: React.CSSProperties = {
   width: 80, height: 80, fontSize: 28, borderRadius: 12,
-  border: '1px solid #444', background: '#2c2826', color: '#fff', cursor: 'pointer',
+  border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--foreground)', cursor: 'pointer',
 }

@@ -35,21 +35,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen flex flex-col" style={{ background: 'var(--background)' }}>
       {/* Header */}
-      <header style={{ background: '#231F20' }} className="flex items-center justify-between px-4 py-3 flex-shrink-0">
+      <header style={{ background: 'var(--background)' }} className="flex items-center justify-between px-4 py-3 flex-shrink-0">
         <div className="flex items-center gap-2">
           <Image src="/hytek-group-logo.png" alt="HYTEK" width={80} height={22} priority />
-          <span className="text-white text-sm font-medium ml-1">Fabrication</span>
+          <span className="text-sm font-medium ml-1" style={{ color: 'var(--foreground)' }}>Fabrication</span>
         </div>
         <div className="flex items-center gap-3">
           {profile && (
-            <span className="text-xs" style={{ color: '#FFCB05' }}>
+            <span className="text-xs" style={{ color: 'var(--foreground)', fontWeight: 700 }}>
               {profile.full_name ?? profile.email}
             </span>
           )}
           <button
             onClick={handleSignOut}
             className="text-xs px-2 py-1 rounded"
-            style={{ color: '#888', background: 'transparent', border: '0.5px solid #333', minHeight: '28px' }}
+            style={{ color: 'var(--text-3)', background: 'transparent', border: '0.5px solid var(--border)', minHeight: '28px' }}
           >
             Sign out
           </button>
@@ -64,7 +64,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* Bottom nav */}
       <nav
         className="flex border-t flex-shrink-0"
-        style={{ background: '#1a1a1c', borderColor: 'var(--border)' }}
+        style={{ background: 'var(--surface-2)', borderColor: 'var(--border)' }}
       >
         {navItems.map(({ href, label, icon }) => {
           // Shop owns the job board + individual job pages (/jobs/[id]).
@@ -78,8 +78,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               href={href}
               className="flex-1 flex flex-col items-center justify-center py-2 text-xs gap-0.5"
               style={{
-                color: active ? '#FFCB05' : '#555',
-                borderTop: active ? '2px solid #FFCB05' : '2px solid transparent',
+                color: active ? 'var(--foreground)' : 'var(--text-2)',
+                fontWeight: active ? 700 : undefined,
+                borderTop: active ? '2px solid var(--hytek-yellow)' : '2px solid transparent',
                 minHeight: '52px',
               }}
             >

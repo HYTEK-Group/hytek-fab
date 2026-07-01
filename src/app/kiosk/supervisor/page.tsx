@@ -6,8 +6,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 
-const YELLOW = '#FFCB05'
-const BLACK = '#231F20'
 const IDLE_MS = 30 * 60 * 1000
 
 interface Session { worker_name: string; role: string; token: string }
@@ -152,7 +150,7 @@ export default function KioskSupervisorPage() {
   return (
     <main style={shell}>
       <header style={hdr}>
-        <h1 style={{ color: YELLOW, margin: 0 }}>Supervisor — {session?.worker_name}</h1>
+        <h1 style={{ color: 'var(--foreground)', fontWeight: 700, margin: 0 }}>Supervisor — {session?.worker_name}</h1>
         <button onClick={signOut} style={ghostBtn}>Sign out</button>
       </header>
 
@@ -166,7 +164,7 @@ export default function KioskSupervisorPage() {
             </button>
           ))}
 
-          <div style={{ marginTop: 24, borderTop: '1px solid #2c2826', paddingTop: 16 }}>
+          <div style={{ marginTop: 24, borderTop: '1px solid var(--border)', paddingTop: 16 }}>
             <button onClick={() => setShowWorkers(v => !v)} style={ghostBtn}>
               {showWorkers ? '▾' : '▸'} Workers ({workers.filter(w => w.is_active).length})
             </button>
@@ -182,7 +180,7 @@ export default function KioskSupervisorPage() {
                   </select>
                   <button onClick={addWorker} style={{ ...primaryBtn, marginBottom: 0 }}>Add</button>
                 </div>
-                {wMsg && <p style={{ fontSize: 13, color: wMsg.startsWith('✓') ? '#97C459' : '#ff6b6b', marginBottom: 8 }}>{wMsg}</p>}
+                {wMsg && <p style={{ fontSize: 13, color: wMsg.startsWith('✓') ? 'var(--success)' : 'var(--danger)', marginBottom: 8 }}>{wMsg}</p>}
                 {workers.filter(w => w.is_active).map(w => (
                   <div key={w.id} style={row}>
                     <span style={{ flex: 1 }}>{w.worker_name} <span style={{ opacity: 0.6 }}>({w.role})</span></span>
@@ -198,7 +196,7 @@ export default function KioskSupervisorPage() {
       {active && (
         <>
           <button onClick={() => setActive(null)} style={ghostBtn}>&#x2190; All jobs</button>
-          <h2 style={{ color: YELLOW }}>{active.quote_number} — {active.name}</h2>
+          <h2 style={{ color: 'var(--foreground)', fontWeight: 700 }}>{active.quote_number} — {active.name}</h2>
 
           <section style={{ marginTop: 16 }}>
             <h3 style={sub}>QC review ({pending.length} awaiting)</h3>
@@ -208,7 +206,7 @@ export default function KioskSupervisorPage() {
                 <label style={{ flex: 1 }}>
                   <input type="checkbox" checked={sel.includes(m.id)} onChange={() => toggle(m.id)} />{' '}
                   {m.mark_id} <span style={{ opacity: 0.6 }}>({m.status})</span>
-                  {m.rework_count > 0 && <span style={{ color: '#F2A65A' }}> &middot; rework {m.rework_count}&times;</span>}
+                  {m.rework_count > 0 && <span style={{ color: 'var(--warning)' }}> &middot; rework {m.rework_count}&times;</span>}
                 </label>
                 <button onClick={() => qcFail(m.id)} style={ghostBtn}>Reject</button>
               </div>
@@ -240,12 +238,12 @@ export default function KioskSupervisorPage() {
   )
 }
 
-const shell: React.CSSProperties = { minHeight: '100vh', background: BLACK, color: '#fff', padding: 24, fontFamily: 'system-ui, sans-serif' }
+const shell: React.CSSProperties = { minHeight: '100vh', background: 'var(--background)', color: 'var(--foreground)', padding: 24, fontFamily: 'system-ui, sans-serif' }
 const hdr: React.CSSProperties = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }
-const sub: React.CSSProperties = { color: YELLOW, fontSize: 16 }
-const jobCard: React.CSSProperties = { display: 'block', width: '100%', textAlign: 'left', background: '#2c2826', border: '1px solid #444', borderRadius: 12, padding: 16, marginBottom: 12, color: '#fff', cursor: 'pointer' }
-const pkgCard: React.CSSProperties = { background: '#2c2826', border: '1px solid #444', borderRadius: 12, padding: 12, marginBottom: 12 }
-const row: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', borderBottom: '1px solid #3a3633' }
-const primaryBtn: React.CSSProperties = { background: YELLOW, color: BLACK, border: 'none', borderRadius: 10, padding: '10px 18px', fontWeight: 700, cursor: 'pointer', marginBottom: 12 }
-const ghostBtn: React.CSSProperties = { background: 'transparent', color: '#fff', border: '1px solid #555', borderRadius: 10, padding: '8px 14px', cursor: 'pointer' }
-const inp: React.CSSProperties = { background: '#1a1a1c', color: '#fff', border: '1px solid #444', borderRadius: 8, padding: '8px 10px', fontSize: 14 }
+const sub: React.CSSProperties = { color: 'var(--foreground)', fontWeight: 700, fontSize: 16 }
+const jobCard: React.CSSProperties = { display: 'block', width: '100%', textAlign: 'left', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: 16, marginBottom: 12, color: 'var(--foreground)', cursor: 'pointer' }
+const pkgCard: React.CSSProperties = { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: 12, marginBottom: 12 }
+const row: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', borderBottom: '1px solid var(--border)' }
+const primaryBtn: React.CSSProperties = { background: 'var(--hytek-yellow)', color: 'var(--on-brand)', border: 'none', borderRadius: 10, padding: '10px 18px', fontWeight: 700, cursor: 'pointer', marginBottom: 12 }
+const ghostBtn: React.CSSProperties = { background: 'transparent', color: 'var(--foreground)', border: '1px solid var(--border)', borderRadius: 10, padding: '8px 14px', cursor: 'pointer' }
+const inp: React.CSSProperties = { background: 'var(--surface-2)', color: 'var(--foreground)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px', fontSize: 14 }

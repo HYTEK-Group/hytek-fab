@@ -71,30 +71,30 @@ export default function ReportPage() {
     URL.revokeObjectURL(url)
   }
 
-  const cell: React.CSSProperties = { padding: '8px 10px', borderBottom: '0.5px solid #2a2a2a', whiteSpace: 'nowrap' }
-  const head: React.CSSProperties = { ...cell, color: '#888', textAlign: 'right', fontWeight: 600, position: 'sticky', top: 0, background: '#1a1a1c' }
-  const num: React.CSSProperties = { ...cell, textAlign: 'right', color: '#fff' }
+  const cell: React.CSSProperties = { padding: '8px 10px', borderBottom: '0.5px solid var(--border)', whiteSpace: 'nowrap' }
+  const head: React.CSSProperties = { ...cell, color: 'var(--text-3)', textAlign: 'right', fontWeight: 600, position: 'sticky', top: 0, background: 'var(--surface-2)' }
+  const num: React.CSSProperties = { ...cell, textAlign: 'right', color: 'var(--foreground)' }
 
   return (
     <AppShell>
       <div className="p-4 max-w-4xl mx-auto">
         <div className="flex justify-between items-center mb-4">
-          <h1 className="text-lg font-semibold" style={{ color: '#FFCB05' }}>Tonnage &amp; time report</h1>
+          <h1 className="text-lg font-semibold" style={{ color: 'var(--foreground)', fontWeight: 700 }}>Tonnage &amp; time report</h1>
           <button onClick={exportCsv} className="text-xs px-3 py-1.5 rounded-lg font-medium"
-            style={{ background: '#FFCB05', color: '#231F20', border: 'none' }}>
+            style={{ background: 'var(--hytek-yellow)', color: 'var(--on-brand)', border: 'none' }}>
             Export CSV
           </button>
         </div>
 
-        <p className="text-xs mb-3" style={{ color: '#666' }}>
+        <p className="text-xs mb-3" style={{ color: 'var(--text-2)' }}>
           Every job — total tonnage (mark weights), hours logged (job time log), and achieved rate (made tonnes ÷ hours). In-house time only.
         </p>
 
-        {fetching && <p className="text-sm" style={{ color: '#555' }}>Loading…</p>}
-        {!fetching && jobs.length === 0 && <p className="text-sm" style={{ color: '#555' }}>No jobs yet.</p>}
+        {fetching && <p className="text-sm" style={{ color: 'var(--text-2)' }}>Loading…</p>}
+        {!fetching && jobs.length === 0 && <p className="text-sm" style={{ color: 'var(--text-2)' }}>No jobs yet.</p>}
 
         {jobs.length > 0 && (
-          <div className="overflow-x-auto rounded-xl" style={{ border: '0.5px solid #2a2a2a' }}>
+          <div className="overflow-x-auto rounded-xl" style={{ border: '0.5px solid var(--border)' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
                 <tr>
@@ -112,23 +112,23 @@ export default function ReportPage() {
                   const r = rate(j.made_kg, j.total_hours)
                   return (
                     <tr key={j.id} style={{ cursor: 'pointer' }} onClick={() => router.push(`/jobs/${j.id}`)}>
-                      <td style={{ ...cell, color: '#fff' }}>
-                        <span style={{ color: '#FFCB05' }}>{j.quote_number}</span> {j.name}
+                      <td style={{ ...cell, color: 'var(--foreground)' }}>
+                        <span style={{ color: 'var(--foreground)', fontWeight: 700 }}>{j.quote_number}</span> {j.name}
                         {j.marks_missing_weight > 0 && (
-                          <span style={{ color: '#C9803A' }}> · {j.marks_missing_weight} no wt</span>
+                          <span style={{ color: 'var(--warning)' }}> · {j.marks_missing_weight} no wt</span>
                         )}
                       </td>
-                      <td style={{ ...cell, color: '#999' }}>{j.status}</td>
+                      <td style={{ ...cell, color: 'var(--text-3)' }}>{j.status}</td>
                       <td style={num}>{kgToTonnes(j.total_kg)}</td>
                       <td style={num}>{kgToTonnes(j.made_kg)}</td>
-                      <td style={{ ...num, color: '#FFCB05' }}>{j.tonnage_pct}%</td>
+                      <td style={{ ...num, color: 'var(--foreground)', fontWeight: 700 }}>{j.tonnage_pct}%</td>
                       <td style={num}>{(j.total_hours ?? 0).toFixed(1)}</td>
                       <td style={num}>{r ?? '—'}</td>
                     </tr>
                   )
                 })}
-                <tr style={{ background: '#1e1e21' }}>
-                  <td style={{ ...cell, color: '#fff', fontWeight: 700 }}>All jobs</td>
+                <tr style={{ background: 'var(--surface)' }}>
+                  <td style={{ ...cell, color: 'var(--foreground)', fontWeight: 700 }}>All jobs</td>
                   <td style={cell}></td>
                   <td style={{ ...num, fontWeight: 700 }}>{kgToTonnes(totals.kg)}</td>
                   <td style={{ ...num, fontWeight: 700 }}>{kgToTonnes(totals.made)}</td>

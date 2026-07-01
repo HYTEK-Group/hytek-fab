@@ -24,12 +24,12 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-6" style={{ background: '#141416' }}>
+    <div className="min-h-screen flex flex-col items-center justify-center p-6" style={{ background: 'var(--surface-2)' }}>
       <div className="w-full max-w-sm">
         <div className="flex justify-center mb-8">
           <div className="flex flex-col items-center gap-3">
-            <Image src="/hytek-group-logo-inverted.png" alt="HYTEK" width={120} height={32} />
-            <span className="text-white text-base font-medium">Fabrication</span>
+            <Image src="/hytek-group-logo.png" alt="HYTEK" width={120} height={32} />
+            <span className="text-base font-medium" style={{ color: 'var(--foreground)' }}>Fabrication</span>
           </div>
         </div>
 
@@ -52,7 +52,7 @@ export default function LoginPage() {
           />
 
           {error && (
-            <p className="text-sm text-center" style={{ color: '#F09595' }}>{error}</p>
+            <p className="text-sm text-center" style={{ color: 'var(--danger)' }}>{error}</p>
           )}
 
           <button
@@ -60,8 +60,8 @@ export default function LoginPage() {
             disabled={loading}
             className="w-full rounded-lg font-medium text-sm"
             style={{
-              background: loading ? '#888' : '#FFCB05',
-              color: '#231F20',
+              background: loading ? 'var(--text-3)' : 'var(--hytek-yellow)',
+              color: 'var(--on-brand)',
               padding: '12px',
               border: 'none',
               cursor: loading ? 'not-allowed' : 'pointer',

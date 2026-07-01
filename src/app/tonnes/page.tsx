@@ -86,35 +86,35 @@ export default function TonnesPage() {
     <AppShell>
       <div className="p-4 max-w-2xl mx-auto">
         {/* Week picker */}
-        <div className="rounded-xl p-3 mb-4 flex items-center justify-between" style={{ background: '#1e1e21', border: '0.5px solid #2a2a2a' }}>
-          <button onClick={() => { setWeekOffset(w => w + 1); setSubmitted(false) }} className="text-xl px-2" style={{ background: 'none', border: 'none', color: '#FFCB05' }}>‹</button>
+        <div className="rounded-xl p-3 mb-4 flex items-center justify-between" style={{ background: 'var(--surface)', border: '0.5px solid var(--border)' }}>
+          <button onClick={() => { setWeekOffset(w => w + 1); setSubmitted(false) }} className="text-xl px-2" style={{ background: 'none', border: 'none', color: 'var(--hytek-yellow)' }}>‹</button>
           <div className="text-center">
-            <p className="text-sm font-medium" style={{ color: '#fff' }}>{fmtWeek(weekStart)}</p>
-            <p className="text-xs" style={{ color: '#555' }}>{weekOffset === 0 ? 'Current week' : `${weekOffset} week${weekOffset > 1 ? 's' : ''} ago`}</p>
+            <p className="text-sm font-medium" style={{ color: 'var(--foreground)' }}>{fmtWeek(weekStart)}</p>
+            <p className="text-xs" style={{ color: 'var(--text-2)' }}>{weekOffset === 0 ? 'Current week' : `${weekOffset} week${weekOffset > 1 ? 's' : ''} ago`}</p>
           </div>
-          <button onClick={() => { setWeekOffset(w => Math.max(0, w - 1)); setSubmitted(false) }} disabled={weekOffset === 0} className="text-xl px-2" style={{ background: 'none', border: 'none', color: weekOffset === 0 ? '#333' : '#FFCB05' }}>›</button>
+          <button onClick={() => { setWeekOffset(w => Math.max(0, w - 1)); setSubmitted(false) }} disabled={weekOffset === 0} className="text-xl px-2" style={{ background: 'none', border: 'none', color: weekOffset === 0 ? 'var(--border)' : 'var(--hytek-yellow)' }}>›</button>
         </div>
 
-        <p className="text-xs mb-2" style={{ color: '#555', textTransform: 'uppercase', letterSpacing: '.07em' }}>Tonnes per job this week</p>
+        <p className="text-xs mb-2" style={{ color: 'var(--text-2)', textTransform: 'uppercase', letterSpacing: '.07em' }}>Tonnes per job this week</p>
 
         {activeJobs.length === 0 && (
-          <div className="rounded-xl p-6 text-center mb-4" style={{ background: '#1e1e21', border: '0.5px solid #2a2a2a' }}>
-            <p style={{ color: '#555' }}>No active fab jobs.</p>
+          <div className="rounded-xl p-6 text-center mb-4" style={{ background: 'var(--surface)', border: '0.5px solid var(--border)' }}>
+            <p style={{ color: 'var(--text-2)' }}>No active fab jobs.</p>
           </div>
         )}
 
         <div className="flex flex-col gap-3 mb-4">
           {activeJobs.map(job => (
-            <div key={job.id} className="rounded-xl p-3" style={{ background: '#1e1e21', border: '0.5px solid #2a2a2a' }}>
-              <p className="text-xs font-medium mb-0.5" style={{ color: '#FFCB05' }}>{job.quote_number}</p>
-              <p className="text-sm font-medium mb-3" style={{ color: '#fff' }}>{job.name}</p>
+            <div key={job.id} className="rounded-xl p-3" style={{ background: 'var(--surface)', border: '0.5px solid var(--border)' }}>
+              <p className="text-xs font-medium mb-0.5" style={{ color: 'var(--foreground)', fontWeight: 700 }}>{job.quote_number}</p>
+              <p className="text-sm font-medium mb-3" style={{ color: 'var(--foreground)' }}>{job.name}</p>
               <div className="grid grid-cols-2 gap-2 mb-2">
                 <div>
-                  <label className="text-xs block mb-1" style={{ color: '#666' }}>Tonnes</label>
+                  <label className="text-xs block mb-1" style={{ color: 'var(--text-2)' }}>Tonnes</label>
                   <input type="number" min="0" step="0.1" placeholder="0.0" value={entries[job.id]?.tonnes ?? ''} onChange={e => setEntry(job.id, 'tonnes', e.target.value)} />
                 </div>
                 <div>
-                  <label className="text-xs block mb-1" style={{ color: '#666' }}>Hours</label>
+                  <label className="text-xs block mb-1" style={{ color: 'var(--text-2)' }}>Hours</label>
                   <input type="number" min="0" step="0.5" placeholder="0" value={entries[job.id]?.hours ?? ''} onChange={e => setEntry(job.id, 'hours', e.target.value)} />
                 </div>
               </div>
@@ -124,18 +124,18 @@ export default function TonnesPage() {
         </div>
 
         {/* Total */}
-        <div className="rounded-xl p-3 mb-4 flex justify-between items-center" style={{ background: '#232326', border: '0.5px solid #2a2a2a' }}>
-          <span className="text-sm" style={{ color: '#777' }}>Total this week</span>
-          <span style={{ color: '#FFCB05', fontSize: '22px', fontWeight: 500 }}>{total.toFixed(1)} t</span>
+        <div className="rounded-xl p-3 mb-4 flex justify-between items-center" style={{ background: 'var(--surface)', border: '0.5px solid var(--border)' }}>
+          <span className="text-sm" style={{ color: 'var(--text-2)' }}>Total this week</span>
+          <span style={{ color: 'var(--foreground)', fontWeight: 700, fontSize: '22px' }}>{total.toFixed(1)} t</span>
         </div>
 
-        {submitted && <p className="text-sm text-center mb-3" style={{ color: '#97C459' }}>✓ Submitted to Hub</p>}
+        {submitted && <p className="text-sm text-center mb-3" style={{ color: 'var(--success)' }}>✓ Submitted to Hub</p>}
 
         <button
           onClick={submit}
           disabled={submitting || total === 0}
           className="w-full rounded-lg text-sm font-medium mb-6"
-          style={{ background: submitting || total === 0 ? '#333' : '#FFCB05', color: '#231F20', padding: '12px', border: 'none', cursor: total === 0 ? 'not-allowed' : 'pointer' }}
+          style={{ background: submitting || total === 0 ? 'var(--surface-2)' : 'var(--hytek-yellow)', color: 'var(--on-brand)', padding: '12px', border: 'none', cursor: total === 0 ? 'not-allowed' : 'pointer' }}
         >
           {submitting ? 'Submitting…' : 'Submit to Hub'}
         </button>
@@ -143,15 +143,15 @@ export default function TonnesPage() {
         {/* History */}
         {history.length > 0 && (
           <>
-            <p className="text-xs mb-2" style={{ color: '#555', textTransform: 'uppercase', letterSpacing: '.07em' }}>Recent entries</p>
-            <div className="rounded-xl overflow-hidden" style={{ background: '#1e1e21', border: '0.5px solid #2a2a2a' }}>
+            <p className="text-xs mb-2" style={{ color: 'var(--text-2)', textTransform: 'uppercase', letterSpacing: '.07em' }}>Recent entries</p>
+            <div className="rounded-xl overflow-hidden" style={{ background: 'var(--surface)', border: '0.5px solid var(--border)' }}>
               {history.slice(0, 10).map((e, i) => (
-                <div key={String(e.id)} className="flex justify-between items-center p-3" style={{ borderBottom: i < 9 ? '0.5px solid #2a2a2a' : 'none' }}>
+                <div key={String(e.id)} className="flex justify-between items-center p-3" style={{ borderBottom: i < 9 ? '0.5px solid var(--border)' : 'none' }}>
                   <div>
-                    <p className="text-xs font-medium" style={{ color: '#FFCB05' }}>{String(e.quote_number)}</p>
-                    <p className="text-xs" style={{ color: '#777' }}>{String(e.week_start)} · {String(e.entered_by)}</p>
+                    <p className="text-xs font-medium" style={{ color: 'var(--foreground)', fontWeight: 700 }}>{String(e.quote_number)}</p>
+                    <p className="text-xs" style={{ color: 'var(--text-2)' }}>{String(e.week_start)} · {String(e.entered_by)}</p>
                   </div>
-                  <span className="text-sm font-medium" style={{ color: '#FFCB05' }}>{Number(e.tonnes).toFixed(1)} t</span>
+                  <span className="text-sm font-medium" style={{ color: 'var(--foreground)', fontWeight: 700 }}>{Number(e.tonnes).toFixed(1)} t</span>
                 </div>
               ))}
             </div>
