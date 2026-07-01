@@ -1,6 +1,9 @@
 // GET /api/fab/marks/[id]/drawing — a short-lived signed URL to this assembly's
 // shop drawing (the block ASSEMBLIES PDF, opened at its page when known). Lets a
 // tap on an assembly open the drawing so the supervisor/worker can see the piece.
+// DELIBERATE: any signed-in floor user may open any assembly's drawing — unlike
+// Start/Done there is no per-worker ownership gate. Shop drawings aren't sensitive
+// within the shop, and a fabricator often needs to see a related/adjacent piece.
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { getUserCaller } from '@/lib/fab-auth'

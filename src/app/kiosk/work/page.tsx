@@ -62,9 +62,11 @@ export default function KioskWorkPage() {
     })
     const j = await res.json().catch(() => ({}))
     if (!res.ok) { alert(j.error ?? 'Failed'); return }
+    // optimistic, then reconcile with server truth (shared tablet may be stale + re-sort)
     setItems(prev => prev.map(m => m.id === id
       ? { ...m, status: action === 'start' ? 'in_progress' : 'done', actual_minutes: action === 'done' ? (j.actual_minutes ?? m.actual_minutes) : m.actual_minutes }
       : m))
+    load(session.token)
   }
 
   async function openDrawing(id: string) {

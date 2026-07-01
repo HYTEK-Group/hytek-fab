@@ -22,7 +22,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const admin = getSupabaseAdmin()
   const { data: mark } = await admin
     .from('fab_marks')
-    .select('id, fab_job_id, assigned_to, started_at, allotted_minutes, contractor_package_id')
+    .select('id, fab_job_id, assigned_to, status, started_at, allotted_minutes, contractor_package_id')
     .eq('id', id).single()
   if (!mark) return NextResponse.json({ error: 'Assembly not found' }, { status: 404 })
 
@@ -34,17 +34,32 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: 'This assembly is out with a contractor' }, { status: 409 })
   }
 
+  // Status guard: Start only from not_started/in_progress, Done only from
+  // in_progress. This makes double-taps and a stale tablet no-ops instead of
+  // (a) reverting a QC-passed assembly or (b) re-measuring actual_minutes from an
+  // old started_at — a bad actual poisons the cross-job time-learning median.
+  const st = String(mark.status)
   const now = new Date()
   let patch: Record<string, unknown>
   if (action === 'start') {
-    patch = { started_at: now.toISOString(), status: 'in_progress' }
+    if (st !== 'not_started' && st !== 'in_progress') {
+      return NextResponse.json({ error: 'Assembly is past fabrication' }, { status: 409 })
+    }
+    if (st === 'in_progress' && mark.started_at) {
+      return NextResponse.json({ ok: true, action, noop: true, status: 'in_progress' }) // already running — keep the clock
+    }
+    patch = { started_at: now.toISOString(), status: 'in_progress', updated_at: now.toISOString() }
   } else {
+    if (st !== 'in_progress') {
+      return NextResponse.json({ error: 'Tap Start first' }, { status: 409 })
+    }
     const started = mark.started_at ? Date.parse(mark.started_at as string) : NaN
     const measured = Number.isFinite(started) ? Math.max(1, Math.round((now.getTime() - started) / 60000)) : null
     patch = {
       finished_at: now.toISOString(),
       actual_minutes: measured ?? (mark.allotted_minutes as number | null) ?? null,
       status: 'done',
+      updated_at: now.toISOString(),
     }
   }
 

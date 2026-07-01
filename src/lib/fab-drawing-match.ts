@@ -7,17 +7,20 @@
 const norm = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]/g, '')
 const tokens = (s: string): string[] => (norm(s).match(/[a-z0-9]{3,}/g) ?? [])
 
-/** Is this an assembly DRAWING pdf (not a report like "Assembly List")? */
-function isAssemblyDrawing(name: string): boolean {
-  return /\.pdf$/i.test(name) && /assembl/i.test(name) &&
-    !/list|summary|material|bolt|chemset|processing|tmi part/i.test(name)
+/** Is this a REPORT pdf (Assembly List / Bolt Summary / material list…) rather
+ *  than a shop DRAWING (ASSEMBLIES / PLATES / SHAFTS)? */
+function isReport(name: string): boolean {
+  return /list|summary|material|bolt|chemset|processing|tmi/i.test(name)
 }
 
 export function pickAssemblyDrawing(names: string[], sourceFile: string | null): string | null {
   const pdfs = names.filter(n => /\.pdf$/i.test(n))
-  if (pdfs.length === 0) return null
-  const drawings = pdfs.filter(isAssemblyDrawing)
-  const pool = drawings.length ? drawings : pdfs
+  // Only ever return a real drawing — never a report. If none is uploaded yet the
+  // route returns "no drawing found" rather than opening a bolt list as the drawing.
+  const drawings = pdfs.filter(n => !isReport(n))
+  if (drawings.length === 0) return null
+  const assemblies = drawings.filter(n => /assembl/i.test(n))
+  const pool = assemblies.length ? assemblies : drawings
   if (pool.length === 1) return pool[0]
 
   // score each candidate by how many source tokens (block, job no) it shares.

@@ -32,4 +32,12 @@ describe('pickAssemblyDrawing', () => {
   it('returns null when there are no PDFs', () => {
     expect(pickAssemblyDrawing(['notes.txt'], 'x')).toBeNull()
   })
+
+  it('returns null (not a report) when only report PDFs are uploaded', () => {
+    const onlyReports = [
+      'HG260012 TH 1 & 2_Assembly List_IFF.pdf',
+      'HG260012 TH 1 & 2_Bolt Summary_IFF.pdf',
+    ]
+    expect(pickAssemblyDrawing(onlyReports, 'HG260012 TH 1 & 2 Assembly List')).toBeNull()
+  })
 })
