@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from 'next'
 import localFont from 'next/font/local'
 import './globals.css'
 import { Providers } from './providers'
+import { ThemeProvider } from '@/components/theme-provider'
+import ThemeToggle from '@/components/theme-toggle'
 
 // Jost is SELF-HOSTED (one variable woff2 covering wght 100–900, latin subset
 // — replaces the five static cuts Google served; rendering unchanged).
@@ -29,9 +31,12 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${jost.variable} h-full antialiased`}>
+    <html lang="en" className={`${jost.variable} h-full antialiased`} suppressHydrationWarning>
       <body className="min-h-full flex flex-col font-sans">
-        <Providers>{children}</Providers>
+        <ThemeProvider>
+          <Providers>{children}</Providers>
+          <ThemeToggle />
+        </ThemeProvider>
       </body>
     </html>
   )
