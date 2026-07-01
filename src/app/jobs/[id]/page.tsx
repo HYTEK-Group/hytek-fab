@@ -4,11 +4,12 @@ import { useEffect, useState, useCallback, use } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/auth-context'
 import { AppShell } from '@/components/app-shell'
+import { AssembliesTab } from '@/components/assemblies-tab'
 import { supabase } from '@/lib/supabase'
 import { kgToTonnes } from '@/lib/fab-tonnage'
 import type { FabJob, FabTask, FabMark, FabTimeEntry } from '@/lib/types'
 
-type Tab = 'tasks' | 'marks' | 'drawings' | 'packages' | 'qc' | 'dispatch' | 'timelog'
+type Tab = 'assemblies' | 'tasks' | 'marks' | 'drawings' | 'packages' | 'qc' | 'dispatch' | 'timelog'
 
 interface JobDetail extends FabJob {
   task_count: number
@@ -807,10 +808,10 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
   const { user, loading } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
-  const validTabs: Tab[] = ['tasks', 'marks', 'drawings', 'packages', 'qc', 'dispatch', 'timelog']
+  const validTabs: Tab[] = ['assemblies', 'tasks', 'marks', 'drawings', 'packages', 'qc', 'dispatch', 'timelog']
   const tabParam = searchParams.get('tab') as Tab | null
   const [job, setJob] = useState<JobDetail | null>(null)
-  const [tab, setTab] = useState<Tab>(tabParam && validTabs.includes(tabParam) ? tabParam : 'tasks')
+  const [tab, setTab] = useState<Tab>(tabParam && validTabs.includes(tabParam) ? tabParam : 'assemblies')
   const [token, setToken] = useState('')
   const [role, setRole] = useState('fabricator')
   const [dispatching, setDispatching] = useState(false)
@@ -854,7 +855,8 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
   const canDispatch = (role === 'admin' || role === 'supervisor') && job.status !== 'complete' && !job.dispatch_requested_at
 
   const TABS: { id: Tab; label: string }[] = [
-    { id: 'tasks', label: 'Tasks' },
+    { id: 'assemblies', label: 'Assemblies' },
+    { id: 'tasks', label: 'Matrix' },
     { id: 'marks', label: 'Marks' },
     { id: 'drawings', label: 'Drawings' },
     { id: 'packages', label: 'Packages' },
@@ -922,6 +924,7 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
 
         {/* Tab content */}
         {token && <>
+          {tab === 'assemblies' && <AssembliesTab jobId={id} token={token} role={role} />}
           {tab === 'tasks' && <TasksTab jobId={id} token={token} role={role} />}
           {tab === 'marks' && <MarksTab jobId={id} token={token} />}
           {tab === 'drawings' && <DrawingsTab jobId={id} token={token} />}
