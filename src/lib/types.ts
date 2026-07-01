@@ -84,8 +84,28 @@ export interface FabMark {
   rework_count: number
   rework_note: string | null
   dispatch_load_id: string | null
+  // ── per-assembly assignment + time + drawing (sql/006) ──
+  suggested_minutes: number | null // what the app suggested (measures the learning)
+  allotted_minutes: number | null  // supervisor's allotted time (his edit)
+  assigned_at: string | null
+  started_at: string | null        // worker tapped Start
+  finished_at: string | null       // worker tapped Done
+  actual_minutes: number | null    // floor actual (ground truth)
+  drawing_file: string | null
+  drawing_page: number | null
+  part_count: number | null
   created_at: string
   updated_at: string
+}
+
+// A mark enriched with its learned time suggestion (for the assign view).
+export interface AssemblyRow extends FabMark {
+  suggestion: {
+    minutes: number
+    basis: string
+    confidence: 'low' | 'medium' | 'good'
+    samples: number
+  }
 }
 
 // ── fab_time_entries ───────────────────────────────────────────────────────

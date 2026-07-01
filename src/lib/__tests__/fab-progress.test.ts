@@ -10,6 +10,9 @@ function mark(p: Partial<FabMark>): FabMark {
     length_mm: null, weight_kg: null, quantity: 1, status: 'not_started',
     note: null, contractor_package_id: null, assigned_to: null,
     rework_count: 0, rework_note: null, dispatch_load_id: null,
+    suggested_minutes: null, allotted_minutes: null, assigned_at: null,
+    started_at: null, finished_at: null, actual_minutes: null,
+    drawing_file: null, drawing_page: null, part_count: null,
     created_at: '', updated_at: '', ...p,
   }
 }
