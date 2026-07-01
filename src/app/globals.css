@@ -1,15 +1,39 @@
 @import "tailwindcss";
 
+/* ──────────────────────────────────────────────────────────────────────────
+   HYTEK Fab — BRIGHT high-contrast theme (built for the factory floor: sun,
+   glare, glance-and-go). White background, near-black bold text, big type,
+   yellow only for actions, strong green/amber/red for status. This palette is
+   the single source of truth — change a value here and it flows everywhere.
+   ────────────────────────────────────────────────────────────────────────── */
 :root {
   --hytek-yellow: #FFCB05;
   --hytek-black: #231F20;
-  --background: #141416;
-  --surface: #1e1e21;
-  --surface-2: #232326;
-  --border: #2a2a2a;
-  --foreground: #ffffff;
-  --muted: #888888;
-  --danger: #F09595;
+
+  --background: #ffffff;   /* page */
+  --surface:    #f3f4f6;   /* cards / panels */
+  --surface-2:  #e6e7eb;   /* inputs / nested rows */
+  --border:     #c4c6cc;   /* visible soft border */
+
+  --foreground: #15171a;   /* primary text — near-black, max contrast */
+  --text-2:     #34373d;   /* secondary text (replaces #555/#666/#777) */
+  --text-3:     #54585f;   /* muted, but still readable in sun */
+  --muted:      #54585f;
+
+  --on-brand:   #231F20;   /* text that sits on a yellow button */
+
+  --success: #15803d;      /* green  — done / qc-passed / ready */
+  --warning: #9a6300;      /* amber  — awaiting / overdue-soon */
+  --danger:  #c62828;      /* red    — fail / overdue */
+  --info:    #1565c0;      /* blue   — at contractor */
+  --accent:  #6a3fb5;      /* purple — returned */
+
+  --chip-success-bg: rgba(21,128,61,.13);
+  --chip-warning-bg: rgba(154,99,0,.15);
+  --chip-danger-bg:  rgba(198,40,40,.11);
+  --chip-info-bg:    rgba(21,101,192,.12);
+  --chip-brand-bg:   rgba(255,184,5,.22);
+  --track:           #dcdee3;   /* progress-bar track */
 }
 
 @theme inline {
@@ -23,7 +47,7 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-size: 14px;
+  font-size: 15px;            /* bumped from 14 for floor readability */
   font-family: system-ui, sans-serif;
 }
 
@@ -31,10 +55,10 @@ input:is([type='text'], [type='email'], [type='password'], [type='number'], [typ
   [type='url'], [type='search'], [type='date'], [type='time'], :not([type])),
 select,
 textarea {
-  background: #141416;
-  border: 1px solid #333;
+  background: #ffffff;
+  border: 1.5px solid var(--border);
   border-radius: 8px;
-  color: #fff;
+  color: var(--foreground);
   padding: 10px 12px;
   font-size: 16px;
   width: 100%;
@@ -45,7 +69,8 @@ input:is([type='text'], [type='email'], [type='password'], [type='number'], [typ
   [type='url'], [type='search'], [type='date'], [type='time'], :not([type])):focus,
 select:focus,
 textarea:focus {
-  box-shadow: 0 0 0 2px #FFCB05;
+  border-color: var(--hytek-black);
+  box-shadow: 0 0 0 3px var(--hytek-yellow);
 }
 
 button {

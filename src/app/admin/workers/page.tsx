@@ -68,16 +68,16 @@ export default function AdminWorkersPage() {
   return (
     <AppShell>
       <div className="p-4 max-w-2xl mx-auto">
-        <h1 className="text-lg font-semibold mb-1" style={{ color: '#FFCB05' }}>Workers — PIN roster</h1>
-        <p className="text-xs mb-4" style={{ color: '#666' }}>
+        <h1 className="text-lg font-semibold mb-1" style={{ color: 'var(--foreground)', fontWeight: 700 }}>Workers — PIN roster</h1>
+        <p className="text-xs mb-4" style={{ color: 'var(--text-2)' }}>
           Floor crew sign in on the tablet at <strong>/kiosk</strong> with their PIN. A supervisor PIN opens the QC + packages panel; a fabricator PIN opens their work list.
         </p>
 
-        {!canManage && <p className="text-sm" style={{ color: '#ff6b6b' }}>Admin or supervisor only.</p>}
+        {!canManage && <p className="text-sm" style={{ color: 'var(--danger)' }}>Admin or supervisor only.</p>}
 
         {canManage && (
-          <form onSubmit={addWorker} className="rounded-xl p-3 mb-4" style={{ background: '#232326', border: '0.5px solid #2a2a2a' }}>
-            <p className="text-xs mb-2" style={{ color: '#555' }}>Add worker</p>
+          <form onSubmit={addWorker} className="rounded-xl p-3 mb-4" style={{ background: 'var(--surface)', border: '0.5px solid var(--border)' }}>
+            <p className="text-xs mb-2" style={{ color: 'var(--text-2)' }}>Add worker</p>
             <div className="flex gap-2 flex-wrap items-center">
               <input placeholder="Name" value={name} onChange={e => setName(e.target.value)} style={inp} />
               <input placeholder="4-digit PIN" value={pin} onChange={e => setPin(e.target.value)} maxLength={4} inputMode="numeric" style={{ ...inp, width: 130 }} />
@@ -86,21 +86,21 @@ export default function AdminWorkersPage() {
                 <option value="supervisor">Supervisor</option>
                 <option value="admin">Admin</option>
               </select>
-              <button type="submit" className="rounded-lg text-sm font-medium" style={{ background: '#FFCB05', color: '#231F20', border: 'none', padding: '8px 16px', cursor: 'pointer' }}>Add</button>
+              <button type="submit" className="rounded-lg text-sm font-medium" style={{ background: 'var(--hytek-yellow)', color: 'var(--on-brand)', border: 'none', padding: '8px 16px', cursor: 'pointer' }}>Add</button>
             </div>
-            {msg && <p className="text-xs mt-2" style={{ color: msg.startsWith('❌') ? '#ff6b6b' : '#97C459' }}>{msg}</p>}
+            {msg && <p className="text-xs mt-2" style={{ color: msg.startsWith('❌') ? 'var(--danger)' : 'var(--success)' }}>{msg}</p>}
           </form>
         )}
 
         <div className="flex flex-col gap-1">
-          {workers.filter(w => w.is_active).length === 0 && <p className="text-sm" style={{ color: '#555' }}>No workers yet.</p>}
+          {workers.filter(w => w.is_active).length === 0 && <p className="text-sm" style={{ color: 'var(--text-2)' }}>No workers yet.</p>}
           {workers.filter(w => w.is_active).map(w => (
-            <div key={w.id} className="rounded-lg p-2 flex items-center gap-2" style={{ background: '#232326', border: '0.5px solid #2a2a2a' }}>
-              <span className="text-sm flex-1" style={{ color: '#fff' }}>{w.worker_name} <span style={{ color: '#777' }}>· {w.role}</span></span>
+            <div key={w.id} className="rounded-lg p-2 flex items-center gap-2" style={{ background: 'var(--surface)', border: '0.5px solid var(--border)' }}>
+              <span className="text-sm flex-1" style={{ color: 'var(--foreground)' }}>{w.worker_name} <span style={{ color: 'var(--text-2)' }}>· {w.role}</span></span>
               {canManage && (
                 <>
-                  <button onClick={() => changePin(w.id)} className="text-xs px-2 py-1 rounded" style={{ background: 'transparent', border: '0.5px solid #555', color: '#aaa', cursor: 'pointer' }}>Change PIN</button>
-                  <button onClick={() => deactivate(w.id)} className="text-xs px-2 py-1 rounded" style={{ background: 'transparent', border: '0.5px solid #555', color: '#aaa', cursor: 'pointer' }}>Remove</button>
+                  <button onClick={() => changePin(w.id)} className="text-xs px-2 py-1 rounded" style={{ background: 'transparent', border: '0.5px solid var(--border)', color: 'var(--text-3)', cursor: 'pointer' }}>Change PIN</button>
+                  <button onClick={() => deactivate(w.id)} className="text-xs px-2 py-1 rounded" style={{ background: 'transparent', border: '0.5px solid var(--border)', color: 'var(--text-3)', cursor: 'pointer' }}>Remove</button>
                 </>
               )}
             </div>
@@ -111,4 +111,4 @@ export default function AdminWorkersPage() {
   )
 }
 
-const inp: React.CSSProperties = { background: '#1a1a1c', color: '#fff', border: '1px solid #2a2a2a', borderRadius: 8, padding: '8px 10px', fontSize: 14 }
+const inp: React.CSSProperties = { background: 'var(--surface-2)', color: 'var(--foreground)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px', fontSize: 14 }

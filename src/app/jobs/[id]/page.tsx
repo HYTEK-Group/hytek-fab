@@ -88,49 +88,49 @@ function TasksTab({ jobId, token, role }: { jobId: string; token: string; role: 
   }
 
   const STATUSES: FabTask['status'][] = ['open', 'in_progress', 'done']
-  const statusColor = (s: FabTask['status']) => s === 'done' ? '#97C459' : s === 'in_progress' ? '#FFCB05' : '#555'
+  const statusColor = (s: FabTask['status']) => s === 'done' ? 'var(--success)' : s === 'in_progress' ? 'var(--hytek-yellow)' : 'var(--text-2)'
   const hrs = (n: number | null | undefined) => n == null ? '—' : `${n}h`
 
   return (
     <div>
       {/* Matrix totals */}
       {totals && (
-        <div className="rounded-xl p-3 mb-3 grid grid-cols-4 gap-2 text-center" style={{ background: '#232326', border: '0.5px solid #2a2a2a' }}>
+        <div className="rounded-xl p-3 mb-3 grid grid-cols-4 gap-2 text-center" style={{ background: 'var(--surface)', border: '0.5px solid var(--border)' }}>
           {[
             { l: 'Allotted', v: `${totals.total_estimated}h` },
             { l: 'Actual', v: `${totals.total_actual}h` },
             { l: 'Tonnes', v: `${totals.total_tonnes}t` },
             { l: 't / hr', v: totals.tonnes_per_hour ?? '—' },
           ].map(s => (
-            <div key={s.l}><p className="text-xs" style={{ color: '#555' }}>{s.l}</p><p className="text-sm font-medium" style={{ color: '#FFCB05' }}>{s.v}</p></div>
+            <div key={s.l}><p className="text-xs" style={{ color: 'var(--text-2)' }}>{s.l}</p><p className="text-sm font-medium" style={{ color: 'var(--foreground)', fontWeight: 700 }}>{s.v}</p></div>
           ))}
         </div>
       )}
 
       {isSup && (
-        <div className="rounded-xl p-3 mb-3" style={{ background: '#232326', border: '0.5px solid #2a2a2a' }}>
-          <p className="text-xs mb-2" style={{ color: '#555' }}>Add task (break the job down — allot hours + a due date)</p>
+        <div className="rounded-xl p-3 mb-3" style={{ background: 'var(--surface)', border: '0.5px solid var(--border)' }}>
+          <p className="text-xs mb-2" style={{ color: 'var(--text-2)' }}>Add task (break the job down — allot hours + a due date)</p>
           <div className="flex gap-2 flex-wrap items-center">
             <input placeholder="Task description…" value={form.desc} onChange={e => setForm(f => ({ ...f, desc: e.target.value }))} className="flex-1" style={{ minWidth: 160 }} />
             <input type="number" min="0" step="0.5" placeholder="Allotted h" value={form.est} onChange={e => setForm(f => ({ ...f, est: e.target.value }))} style={{ width: 100 }} />
             <input type="date" value={form.due} onChange={e => setForm(f => ({ ...f, due: e.target.value }))} style={{ width: 150 }} />
             <button onClick={addTask} disabled={adding || !form.desc.trim()} className="px-4 rounded-lg text-sm font-medium"
-              style={{ background: '#FFCB05', color: '#231F20', border: 'none', opacity: adding || !form.desc.trim() ? .5 : 1 }}>Add</button>
+              style={{ background: 'var(--hytek-yellow)', color: 'var(--on-brand)', border: 'none', opacity: adding || !form.desc.trim() ? .5 : 1 }}>Add</button>
           </div>
         </div>
       )}
 
-      {tasks.length === 0 && <p className="text-sm text-center py-6" style={{ color: '#555' }}>No tasks yet.</p>}
+      {tasks.length === 0 && <p className="text-sm text-center py-6" style={{ color: 'var(--text-2)' }}>No tasks yet.</p>}
 
       <div className="flex flex-col gap-2">
         {tasks.map(task => (
-          <div key={task.id} className="rounded-xl p-3" style={{ background: '#232326', border: '0.5px solid #2a2a2a' }}>
+          <div key={task.id} className="rounded-xl p-3" style={{ background: 'var(--surface)', border: '0.5px solid var(--border)' }}>
             <div className="flex justify-between items-start gap-2 mb-2">
-              <p className="text-sm" style={{ color: task.status === 'done' ? '#555' : '#fff', textDecoration: task.status === 'done' ? 'line-through' : 'none' }}>{task.description}</p>
+              <p className="text-sm" style={{ color: task.status === 'done' ? 'var(--text-2)' : 'var(--foreground)', textDecoration: task.status === 'done' ? 'line-through' : 'none' }}>{task.description}</p>
               <div className="flex gap-1 flex-shrink-0">
                 {STATUSES.map(s => (
                   <button key={s} onClick={() => updateTask(task.id, { status: s })} className="text-xs px-2 py-0.5 rounded-full"
-                    style={{ background: task.status === s ? (s === 'done' ? 'rgba(99,153,34,.2)' : s === 'in_progress' ? 'rgba(255,203,5,.15)' : '#2a2a2a') : 'transparent', color: task.status === s ? statusColor(s) : '#444', border: `0.5px solid ${task.status === s ? statusColor(s) : '#333'}` }}>
+                    style={{ background: task.status === s ? (s === 'done' ? 'var(--chip-success-bg)' : s === 'in_progress' ? 'var(--chip-brand-bg)' : 'var(--surface-2)') : 'transparent', color: task.status === s ? statusColor(s) : 'var(--text-2)', border: `0.5px solid ${task.status === s ? statusColor(s) : 'var(--border)'}` }}>
                     {s === 'in_progress' ? 'WIP' : s}
                   </button>
                 ))}
@@ -138,39 +138,39 @@ function TasksTab({ jobId, token, role }: { jobId: string; token: string; role: 
             </div>
 
             {/* Matrix row */}
-            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs mb-2" style={{ color: '#888' }}>
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs mb-2" style={{ color: 'var(--text-3)' }}>
               <span>Allotted {hrs(task.estimated_hours)}</span>
               <span>Actual {task.actual_hours ?? 0}h</span>
               {task.variance_hours != null && (
-                <span style={{ color: task.variance_hours > 0 ? '#F2A65A' : '#97C459' }}>
+                <span style={{ color: task.variance_hours > 0 ? 'var(--warning)' : 'var(--success)' }}>
                   {task.variance_hours > 0 ? `+${task.variance_hours}h over` : `${Math.abs(task.variance_hours)}h under`}
                 </span>
               )}
               <span>{task.tonnes ?? 0}t</span>
-              <span style={{ color: '#FFCB05' }}>{task.tonnes_per_hour != null ? `${task.tonnes_per_hour} t/hr` : '—'}</span>
+              <span style={{ color: 'var(--foreground)', fontWeight: 700 }}>{task.tonnes_per_hour != null ? `${task.tonnes_per_hour} t/hr` : '—'}</span>
               {task.due_on && <span>due {task.due_on}</span>}
             </div>
 
             <div className="flex justify-between items-center gap-2">
               <input placeholder="Assign worker…" defaultValue={task.assigned_to ?? ''}
                 onBlur={e => { if (e.target.value !== (task.assigned_to ?? '')) updateTask(task.id, { assigned_to: e.target.value || null }) }}
-                className="text-xs" style={{ width: 140, background: 'transparent', border: '0.5px solid #2a2a2a', borderRadius: 6, padding: '3px 6px', color: '#777' }} />
+                className="text-xs" style={{ width: 140, background: 'transparent', border: '0.5px solid var(--border)', borderRadius: 6, padding: '3px 6px', color: 'var(--text-2)' }} />
               {isSup && (
                 <input type="number" min="0" step="0.5" placeholder="allot h" defaultValue={task.estimated_hours ?? ''}
                   onBlur={e => { const v = e.target.value === '' ? null : parseFloat(e.target.value); if (v !== (task.estimated_hours ?? null)) updateTask(task.id, { estimated_hours: v }) }}
-                  className="text-xs" style={{ width: 70, background: 'transparent', border: '0.5px solid #2a2a2a', borderRadius: 6, padding: '3px 6px', color: '#777' }} />
+                  className="text-xs" style={{ width: 70, background: 'transparent', border: '0.5px solid var(--border)', borderRadius: 6, padding: '3px 6px', color: 'var(--text-2)' }} />
               )}
-              <button onClick={() => openAssign(task.id)} className="text-xs" style={{ color: '#85B7EB', background: 'none', border: 'none', cursor: 'pointer' }}>
+              <button onClick={() => openAssign(task.id)} className="text-xs" style={{ color: 'var(--info)', background: 'none', border: 'none', cursor: 'pointer' }}>
                 marks ({task.linked_marks ?? 0}) {openTask === task.id ? '▾' : '▸'}
               </button>
             </div>
 
             {openTask === task.id && (
               <div className="mt-2 flex flex-wrap gap-1">
-                {marks.length === 0 && <span className="text-xs" style={{ color: '#555' }}>No marks on this job yet.</span>}
+                {marks.length === 0 && <span className="text-xs" style={{ color: 'var(--text-2)' }}>No marks on this job yet.</span>}
                 {marks.map(m => (
                   <button key={m.id} onClick={() => toggleMark(task.id, m.id)} className="text-xs px-2 py-0.5 rounded-full"
-                    style={{ background: assigned.has(m.id) ? 'rgba(133,183,235,.15)' : 'transparent', border: `0.5px solid ${assigned.has(m.id) ? '#85B7EB' : '#2a2a2a'}`, color: assigned.has(m.id) ? '#85B7EB' : '#888' }}>
+                    style={{ background: assigned.has(m.id) ? 'var(--chip-info-bg)' : 'transparent', border: `0.5px solid ${assigned.has(m.id) ? 'var(--info)' : 'var(--border)'}`, color: assigned.has(m.id) ? 'var(--info)' : 'var(--text-3)' }}>
                     {m.mark_id}
                   </button>
                 ))}
@@ -281,9 +281,9 @@ function MarksTab({ jobId, token }: { jobId: string; token: string }) {
 
   const statusColor = (s: FabMark['status']) => {
     const map: Record<FabMark['status'], string> = {
-      not_started: '#555', in_progress: '#FFCB05', done: '#97C459', at_contractor: '#85B7EB', returned: '#9B7FE0', qc_passed: '#63D297'
+      not_started: 'var(--text-2)', in_progress: 'var(--hytek-yellow)', done: 'var(--success)', at_contractor: 'var(--info)', returned: 'var(--accent)', qc_passed: 'var(--success)'
     }
-    return map[s] ?? '#555'
+    return map[s] ?? 'var(--text-2)'
   }
 
   const done = marks.filter(m => m.status === 'done' || m.status === 'returned' || m.status === 'qc_passed').length
@@ -291,37 +291,37 @@ function MarksTab({ jobId, token }: { jobId: string; token: string }) {
   return (
     <div>
       {/* Import Assembly List */}
-      <div className="rounded-xl p-3 mb-3" style={{ background: '#232326', border: '0.5px solid #2a2a2a' }}>
+      <div className="rounded-xl p-3 mb-3" style={{ background: 'var(--surface)', border: '0.5px solid var(--border)' }}>
         <div className="flex items-center justify-between gap-2">
-          <p className="text-xs" style={{ color: '#555' }}>Import Tekla Assembly List (.xlsx) — auto-loads marks + weights</p>
-          <label className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: '#FFCB05', color: '#231F20', cursor: 'pointer', opacity: importing ? 0.5 : 1 }}>
+          <p className="text-xs" style={{ color: 'var(--text-2)' }}>Import Tekla Assembly List (.xlsx) — auto-loads marks + weights</p>
+          <label className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: 'var(--hytek-yellow)', color: 'var(--on-brand)', cursor: 'pointer', opacity: importing ? 0.5 : 1 }}>
             {importing ? 'Importing…' : 'Import'}
             <input type="file" accept=".xlsx,.xls" disabled={importing} onChange={importAssembly} style={{ display: 'none' }} />
           </label>
         </div>
-        {importMsg && <p className="text-xs mt-2" style={{ color: importMsg.startsWith('❌') ? '#ff6b6b' : '#97C459' }}>{importMsg}</p>}
-        <div className="flex items-center justify-between gap-2 mt-3 pt-3" style={{ borderTop: '0.5px solid #2a2a2a' }}>
-          <p className="text-xs" style={{ color: '#555' }}>Import BOM reports (Part Material / Plate / Bolt / Chemset) — for purchasing</p>
-          <label className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: 'transparent', color: '#FFCB05', border: '0.5px solid #FFCB05', cursor: 'pointer', opacity: bomImporting ? 0.5 : 1 }}>
+        {importMsg && <p className="text-xs mt-2" style={{ color: importMsg.startsWith('❌') ? 'var(--danger)' : 'var(--success)' }}>{importMsg}</p>}
+        <div className="flex items-center justify-between gap-2 mt-3 pt-3" style={{ borderTop: '0.5px solid var(--border)' }}>
+          <p className="text-xs" style={{ color: 'var(--text-2)' }}>Import BOM reports (Part Material / Plate / Bolt / Chemset) — for purchasing</p>
+          <label className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: 'transparent', color: 'var(--foreground)', border: '0.5px solid var(--hytek-yellow)', cursor: 'pointer', opacity: bomImporting ? 0.5 : 1, fontWeight: 700 }}>
             {bomImporting ? 'Importing…' : 'Import BOM'}
             <input type="file" accept=".xlsx,.xls" multiple disabled={bomImporting} onChange={importBom} style={{ display: 'none' }} />
           </label>
         </div>
-        {bomMsg && <p className="text-xs mt-2" style={{ color: bomMsg.startsWith('❌') ? '#ff6b6b' : '#97C459' }}>{bomMsg}</p>}
+        {bomMsg && <p className="text-xs mt-2" style={{ color: bomMsg.startsWith('❌') ? 'var(--danger)' : 'var(--success)' }}>{bomMsg}</p>}
       </div>
 
       {/* Progress */}
       <div className="flex items-center gap-3 mb-3">
-        <div className="flex-1 rounded-full h-1" style={{ background: '#2a2a2a' }}>
-          <div className="h-full rounded-full" style={{ background: '#FFCB05', width: marks.length ? `${(done / marks.length) * 100}%` : '0%' }} />
+        <div className="flex-1 rounded-full h-1" style={{ background: 'var(--track)' }}>
+          <div className="h-full rounded-full" style={{ background: 'var(--hytek-yellow)', width: marks.length ? `${(done / marks.length) * 100}%` : '0%' }} />
         </div>
-        <span className="text-xs" style={{ color: '#777' }}>{done}/{marks.length}</span>
+        <span className="text-xs" style={{ color: 'var(--text-2)' }}>{done}/{marks.length}</span>
       </div>
 
       {/* Bulk actions */}
       {selected.size > 0 && (
-        <div className="rounded-xl p-2 mb-3 flex gap-2 items-center" style={{ background: '#232326', border: '0.5px solid #2a2a2a' }}>
-          <span className="text-xs mr-2" style={{ color: '#777' }}>{selected.size} selected</span>
+        <div className="rounded-xl p-2 mb-3 flex gap-2 items-center" style={{ background: 'var(--surface)', border: '0.5px solid var(--border)' }}>
+          <span className="text-xs mr-2" style={{ color: 'var(--text-2)' }}>{selected.size} selected</span>
           {(['in_progress', 'done', 'at_contractor'] as FabMark['status'][]).map(s => (
             <button key={s} onClick={() => bulkStatus(s)} className="text-xs px-3 py-1 rounded-full"
               style={{ background: 'transparent', border: `0.5px solid ${statusColor(s)}`, color: statusColor(s) }}>
@@ -332,38 +332,38 @@ function MarksTab({ jobId, token }: { jobId: string; token: string }) {
       )}
 
       {/* Add mark form */}
-      <div className="rounded-xl p-3 mb-3" style={{ background: '#232326', border: '0.5px solid #2a2a2a' }}>
-        <p className="text-xs mb-2" style={{ color: '#555' }}>Add mark</p>
+      <div className="rounded-xl p-3 mb-3" style={{ background: 'var(--surface)', border: '0.5px solid var(--border)' }}>
+        <p className="text-xs mb-2" style={{ color: 'var(--text-2)' }}>Add mark</p>
         <div className="grid grid-cols-2 gap-2 mb-2">
-          <div><label className="text-xs block mb-1" style={{ color: '#555' }}>Mark ID</label>
+          <div><label className="text-xs block mb-1" style={{ color: 'var(--text-2)' }}>Mark ID</label>
             <input placeholder="A1" value={newMark.mark_id} onChange={e => setNewMark(p => ({ ...p, mark_id: e.target.value }))} /></div>
-          <div><label className="text-xs block mb-1" style={{ color: '#555' }}>Section</label>
+          <div><label className="text-xs block mb-1" style={{ color: 'var(--text-2)' }}>Section</label>
             <input placeholder="310UB46" value={newMark.section} onChange={e => setNewMark(p => ({ ...p, section: e.target.value }))} /></div>
-          <div><label className="text-xs block mb-1" style={{ color: '#555' }}>Length (mm)</label>
+          <div><label className="text-xs block mb-1" style={{ color: 'var(--text-2)' }}>Length (mm)</label>
             <input type="number" placeholder="3200" value={newMark.length_mm} onChange={e => setNewMark(p => ({ ...p, length_mm: e.target.value }))} /></div>
-          <div><label className="text-xs block mb-1" style={{ color: '#555' }}>Weight (kg)</label>
+          <div><label className="text-xs block mb-1" style={{ color: 'var(--text-2)' }}>Weight (kg)</label>
             <input type="number" placeholder="46.5" step="0.1" value={newMark.weight_kg} onChange={e => setNewMark(p => ({ ...p, weight_kg: e.target.value }))} /></div>
         </div>
         <button onClick={addMark} disabled={adding || !newMark.mark_id.trim()} className="w-full rounded-lg text-sm font-medium"
-          style={{ background: '#FFCB05', color: '#231F20', padding: '8px', border: 'none', opacity: adding || !newMark.mark_id.trim() ? .5 : 1 }}>
+          style={{ background: 'var(--hytek-yellow)', color: 'var(--on-brand)', padding: '8px', border: 'none', opacity: adding || !newMark.mark_id.trim() ? .5 : 1 }}>
           Add mark
         </button>
       </div>
 
-      {marks.length === 0 && <p className="text-sm text-center py-6" style={{ color: '#555' }}>No marks. Add from Tekla list.</p>}
+      {marks.length === 0 && <p className="text-sm text-center py-6" style={{ color: 'var(--text-2)' }}>No marks. Add from Tekla list.</p>}
 
       <div className="flex flex-col gap-1">
         {marks.map(mark => (
           <div key={mark.id} className="rounded-lg p-2 flex items-center gap-2"
-            style={{ background: selected.has(mark.id) ? 'rgba(255,203,5,.05)' : '#232326', border: `0.5px solid ${selected.has(mark.id) ? '#FFCB05' : '#2a2a2a'}`, cursor: 'pointer' }}
+            style={{ background: selected.has(mark.id) ? 'var(--chip-brand-bg)' : 'var(--surface)', border: `0.5px solid ${selected.has(mark.id) ? 'var(--hytek-yellow)' : 'var(--border)'}`, cursor: 'pointer' }}
             onClick={() => toggleSelect(mark.id)}>
             <div className="w-4 h-4 rounded flex-shrink-0 flex items-center justify-center"
-              style={{ background: selected.has(mark.id) ? '#FFCB05' : '#2a2a2a', border: '0.5px solid #333' }}>
-              {selected.has(mark.id) && <span style={{ color: '#231F20', fontSize: '10px' }}>✓</span>}
+              style={{ background: selected.has(mark.id) ? 'var(--hytek-yellow)' : 'var(--surface-2)', border: '0.5px solid var(--border)' }}>
+              {selected.has(mark.id) && <span style={{ color: 'var(--on-brand)', fontSize: '10px' }}>✓</span>}
             </div>
-            <span className="text-xs font-medium w-10 flex-shrink-0" style={{ color: '#FFCB05' }}>{mark.mark_id}</span>
-            <span className="text-xs flex-1 truncate" style={{ color: '#888' }}>{mark.section ?? '—'}</span>
-            {mark.length_mm && <span className="text-xs" style={{ color: '#555' }}>{(mark.length_mm / 1000).toFixed(2)}m</span>}
+            <span className="text-xs font-medium w-10 flex-shrink-0" style={{ color: 'var(--foreground)', fontWeight: 700 }}>{mark.mark_id}</span>
+            <span className="text-xs flex-1 truncate" style={{ color: 'var(--text-3)' }}>{mark.section ?? '—'}</span>
+            {mark.length_mm && <span className="text-xs" style={{ color: 'var(--text-2)' }}>{(mark.length_mm / 1000).toFixed(2)}m</span>}
             <span className="text-xs px-1.5 py-0.5 rounded-full" style={{ background: 'transparent', border: `0.5px solid ${statusColor(mark.status)}`, color: statusColor(mark.status) }}>
               {mark.status.replace('_', ' ')}
             </span>
@@ -385,11 +385,11 @@ function DrawingsTab({ jobId, token }: { jobId: string; token: string }) {
       .then(j => { setDrawings(j.drawings ?? []); setLoading(false) })
   }, [jobId, token])
 
-  if (loading) return <p className="text-sm text-center py-6" style={{ color: '#555' }}>Loading…</p>
+  if (loading) return <p className="text-sm text-center py-6" style={{ color: 'var(--text-2)' }}>Loading…</p>
   if (drawings.length === 0)
     return (
-      <div className="rounded-xl p-6 text-center" style={{ background: '#232326', border: '0.5px solid #2a2a2a' }}>
-        <p style={{ color: '#555' }}>No drawings yet. Sync server uploads PDFs when Y: drive is accessible.</p>
+      <div className="rounded-xl p-6 text-center" style={{ background: 'var(--surface)', border: '0.5px solid var(--border)' }}>
+        <p style={{ color: 'var(--text-2)' }}>No drawings yet. Sync server uploads PDFs when Y: drive is accessible.</p>
       </div>
     )
 
@@ -398,13 +398,13 @@ function DrawingsTab({ jobId, token }: { jobId: string; token: string }) {
       {drawings.map(d => (
         <a key={d.name} href={d.url} target="_blank" rel="noopener noreferrer"
           className="rounded-xl p-3 flex items-center gap-3 no-underline"
-          style={{ background: '#232326', border: '0.5px solid #2a2a2a' }}>
-          <span style={{ color: '#FFCB05', fontSize: '20px' }}>📄</span>
+          style={{ background: 'var(--surface)', border: '0.5px solid var(--border)' }}>
+          <span style={{ color: 'var(--hytek-yellow)', fontSize: '20px' }}>📄</span>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium truncate" style={{ color: '#fff' }}>{d.name}</p>
-            {d.size && <p className="text-xs" style={{ color: '#555' }}>{(d.size / 1024).toFixed(0)} KB</p>}
+            <p className="text-sm font-medium truncate" style={{ color: 'var(--foreground)' }}>{d.name}</p>
+            {d.size && <p className="text-xs" style={{ color: 'var(--text-2)' }}>{(d.size / 1024).toFixed(0)} KB</p>}
           </div>
-          <span className="text-xs" style={{ color: '#FFCB05' }}>Open ↗</span>
+          <span className="text-xs" style={{ color: 'var(--foreground)', fontWeight: 700 }}>Open ↗</span>
         </a>
       ))}
     </div>
@@ -413,7 +413,7 @@ function DrawingsTab({ jobId, token }: { jobId: string; token: string }) {
 
 // Shared small chip-button style for the new tabs.
 const chip: React.CSSProperties = {
-  background: 'transparent', border: '0.5px solid #555', color: '#aaa',
+  background: 'transparent', border: '0.5px solid var(--border)', color: 'var(--text-3)',
   borderRadius: 999, padding: '4px 10px', fontSize: 12, cursor: 'pointer',
 }
 
@@ -434,7 +434,7 @@ function PackageMarkPicker({ free, onAdd }: { free: FabMark[]; onAdd: (ids: stri
   return (
     <div className="flex gap-2 items-start">
       <select multiple value={sel} onChange={e => setSel(Array.from(e.target.selectedOptions, o => o.value))}
-        className="text-xs flex-1" style={{ minHeight: 70, background: '#1a1a1c', color: '#ccc', border: '0.5px solid #2a2a2a', borderRadius: 6 }}>
+        className="text-xs flex-1" style={{ minHeight: 70, background: 'var(--surface-2)', color: 'var(--text-3)', border: '0.5px solid var(--border)', borderRadius: 6 }}>
         {free.map(m => <option key={m.id} value={m.id}>{m.mark_id}{m.section ? ` · ${m.section}` : ''}</option>)}
       </select>
       <button onClick={() => { onAdd(sel); setSel([]) }} disabled={!sel.length} style={{ ...chip, opacity: sel.length ? 1 : .5 }}>Add</button>
@@ -509,8 +509,8 @@ function PackagesTab({ jobId, token }: { jobId: string; token: string }) {
 
   return (
     <div>
-      <div className="rounded-xl p-3 mb-3" style={{ background: '#232326', border: '0.5px solid #2a2a2a' }}>
-        <p className="text-xs mb-2" style={{ color: '#555' }}>New contractor / treatment package</p>
+      <div className="rounded-xl p-3 mb-3" style={{ background: 'var(--surface)', border: '0.5px solid var(--border)' }}>
+        <p className="text-xs mb-2" style={{ color: 'var(--text-2)' }}>New contractor / treatment package</p>
         <div className="grid grid-cols-2 gap-2 mb-2">
           <input placeholder="Contractor name" value={form.contractor_name} onChange={e => setForm(f => ({ ...f, contractor_name: e.target.value }))} />
           <select value={form.package_type} onChange={e => setForm(f => ({ ...f, package_type: e.target.value }))}>
@@ -530,24 +530,24 @@ function PackagesTab({ jobId, token }: { jobId: string; token: string }) {
           <input placeholder="Scope (e.g. CNC base plates)" value={form.scope_note} onChange={e => setForm(f => ({ ...f, scope_note: e.target.value }))} />
         </div>
         <button onClick={create} disabled={creating || !form.contractor_name.trim()} className="w-full rounded-lg text-sm font-medium"
-          style={{ background: '#FFCB05', color: '#231F20', padding: '8px', border: 'none', opacity: creating || !form.contractor_name.trim() ? .5 : 1 }}>
+          style={{ background: 'var(--hytek-yellow)', color: 'var(--on-brand)', padding: '8px', border: 'none', opacity: creating || !form.contractor_name.trim() ? .5 : 1 }}>
           Create package
         </button>
       </div>
 
-      {packages.length === 0 && <p className="text-sm text-center py-6" style={{ color: '#555' }}>No packages yet.</p>}
+      {packages.length === 0 && <p className="text-sm text-center py-6" style={{ color: 'var(--text-2)' }}>No packages yet.</p>}
 
       <div className="flex flex-col gap-2">
         {packages.map(p => {
           const mine = marks.filter(m => m.contractor_package_id === p.id)
           return (
-            <div key={p.id} className="rounded-xl p-3" style={{ background: '#232326', border: '0.5px solid #2a2a2a' }}>
+            <div key={p.id} className="rounded-xl p-3" style={{ background: 'var(--surface)', border: '0.5px solid var(--border)' }}>
               <div className="flex justify-between items-start gap-2">
                 <div>
-                  <p className="text-sm font-medium" style={{ color: '#fff' }}>{p.contractor_name}{p.scope_note ? ` — ${p.scope_note}` : ''}</p>
-                  <p className="text-xs" style={{ color: '#555' }}>{mine.length} marks · {p.package_type}{p.treatment_type ? ` / ${p.treatment_type}` : ''}</p>
+                  <p className="text-sm font-medium" style={{ color: 'var(--foreground)' }}>{p.contractor_name}{p.scope_note ? ` — ${p.scope_note}` : ''}</p>
+                  <p className="text-xs" style={{ color: 'var(--text-2)' }}>{mine.length} marks · {p.package_type}{p.treatment_type ? ` / ${p.treatment_type}` : ''}</p>
                 </div>
-                <span className="text-xs px-2 py-0.5 rounded-full" style={{ border: '0.5px solid #FFCB05', color: '#FFCB05' }}>{p.status}</span>
+                <span className="text-xs px-2 py-0.5 rounded-full" style={{ border: '0.5px solid var(--hytek-yellow)', color: 'var(--foreground)', fontWeight: 700 }}>{p.status}</span>
               </div>
               <div className="flex gap-2 mt-2 flex-wrap">
                 {p.status === 'pending' && <button onClick={() => setStatus(p.id, 'sent')} style={chip}>Mark sent</button>}
@@ -556,14 +556,14 @@ function PackagesTab({ jobId, token }: { jobId: string; token: string }) {
                 <button onClick={() => logCall(p.id)} style={chip}>Log call</button>
               </div>
               <details className="mt-2">
-                <summary className="text-xs" style={{ color: '#777', cursor: 'pointer' }}>Assign marks ({mine.length})</summary>
+                <summary className="text-xs" style={{ color: 'var(--text-2)', cursor: 'pointer' }}>Assign marks ({mine.length})</summary>
                 <div className="mt-2">
                   <PackageMarkPicker free={free} onAdd={(ids) => assignMarks(p.id, ids)} />
                   <div className="flex flex-wrap gap-1 mt-2">
                     {mine.map(m => (
-                      <span key={m.id} className="text-xs px-2 py-0.5 rounded-full flex items-center gap-1" style={{ border: '0.5px solid #2a2a2a', color: '#888' }}>
+                      <span key={m.id} className="text-xs px-2 py-0.5 rounded-full flex items-center gap-1" style={{ border: '0.5px solid var(--border)', color: 'var(--text-3)' }}>
                         {m.mark_id} ({m.status})
-                        <button onClick={() => removeMark(p.id, m.id)} style={{ background: 'none', border: 'none', color: '#9B7FE0', cursor: 'pointer', padding: 0 }}>✕</button>
+                        <button onClick={() => removeMark(p.id, m.id)} style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', padding: 0 }}>✕</button>
                       </span>
                     ))}
                   </div>
@@ -611,21 +611,21 @@ function QCTab({ jobId, token }: { jobId: string; token: string }) {
   return (
     <div>
       <div className="flex justify-between items-center mb-3">
-        <span className="text-xs" style={{ color: '#777' }}>{pending.length} awaiting QC</span>
+        <span className="text-xs" style={{ color: 'var(--text-2)' }}>{pending.length} awaiting QC</span>
         <button onClick={approve} disabled={!selected.size} className="text-xs px-3 py-1.5 rounded-lg font-medium"
-          style={{ background: selected.size ? '#97C459' : '#1e1e21', color: selected.size ? '#fff' : '#555', border: 'none' }}>
+          style={{ background: selected.size ? 'var(--success)' : 'var(--surface)', color: selected.size ? 'var(--foreground)' : 'var(--text-2)', border: 'none' }}>
           Approve selected ({selected.size})
         </button>
       </div>
-      {pending.length === 0 && <p className="text-sm text-center py-6" style={{ color: '#555' }}>Nothing awaiting QC.</p>}
+      {pending.length === 0 && <p className="text-sm text-center py-6" style={{ color: 'var(--text-2)' }}>Nothing awaiting QC.</p>}
       <div className="flex flex-col gap-1">
         {pending.map(m => (
-          <div key={m.id} className="rounded-lg p-2 flex items-center gap-2" style={{ background: '#232326', border: '0.5px solid #2a2a2a' }}>
-            <div onClick={() => toggle(m.id)} className="w-4 h-4 rounded flex-shrink-0 flex items-center justify-center" style={{ background: selected.has(m.id) ? '#FFCB05' : '#2a2a2a', border: '0.5px solid #333', cursor: 'pointer' }}>
-              {selected.has(m.id) && <span style={{ color: '#231F20', fontSize: 10 }}>✓</span>}
+          <div key={m.id} className="rounded-lg p-2 flex items-center gap-2" style={{ background: 'var(--surface)', border: '0.5px solid var(--border)' }}>
+            <div onClick={() => toggle(m.id)} className="w-4 h-4 rounded flex-shrink-0 flex items-center justify-center" style={{ background: selected.has(m.id) ? 'var(--hytek-yellow)' : 'var(--surface-2)', border: '0.5px solid var(--border)', cursor: 'pointer' }}>
+              {selected.has(m.id) && <span style={{ color: 'var(--on-brand)', fontSize: 10 }}>✓</span>}
             </div>
-            <span className="text-xs font-medium w-10 flex-shrink-0" style={{ color: '#FFCB05' }}>{m.mark_id}</span>
-            <span className="text-xs flex-1" style={{ color: '#888' }}>{m.status}{m.rework_count > 0 ? ` · rework ${m.rework_count}×` : ''}{m.rework_note ? ` — ${m.rework_note}` : ''}</span>
+            <span className="text-xs font-medium w-10 flex-shrink-0" style={{ color: 'var(--foreground)', fontWeight: 700 }}>{m.mark_id}</span>
+            <span className="text-xs flex-1" style={{ color: 'var(--text-3)' }}>{m.status}{m.rework_count > 0 ? ` · rework ${m.rework_count}×` : ''}{m.rework_note ? ` — ${m.rework_note}` : ''}</span>
             <button onClick={() => reject(m.id)} style={chip}>Reject</button>
           </div>
         ))}
@@ -685,12 +685,12 @@ function DispatchTab({ jobId, token }: { jobId: string; token: string }) {
         <button onClick={createLoad} style={chip}>New load</button>
       </div>
 
-      <p className="text-xs mb-2" style={{ color: '#777' }}>Ready to load — QC passed ({ready.length})</p>
+      <p className="text-xs mb-2" style={{ color: 'var(--text-2)' }}>Ready to load — QC passed ({ready.length})</p>
       <div className="flex flex-wrap gap-1 mb-4">
-        {ready.length === 0 && <span className="text-xs" style={{ color: '#555' }}>No QC-passed marks waiting.</span>}
+        {ready.length === 0 && <span className="text-xs" style={{ color: 'var(--text-2)' }}>No QC-passed marks waiting.</span>}
         {ready.map(m => (
           <button key={m.id} onClick={() => toggle(m.id)} className="text-xs px-2 py-1 rounded-full"
-            style={{ background: selected.has(m.id) ? 'rgba(255,203,5,.15)' : 'transparent', border: `0.5px solid ${selected.has(m.id) ? '#FFCB05' : '#2a2a2a'}`, color: selected.has(m.id) ? '#FFCB05' : '#888' }}>
+            style={{ background: selected.has(m.id) ? 'var(--chip-brand-bg)' : 'transparent', border: `0.5px solid ${selected.has(m.id) ? 'var(--hytek-yellow)' : 'var(--border)'}`, color: selected.has(m.id) ? 'var(--foreground)' : 'var(--text-3)', fontWeight: selected.has(m.id) ? 700 : 400 }}>
             {m.mark_id}
           </button>
         ))}
@@ -698,23 +698,23 @@ function DispatchTab({ jobId, token }: { jobId: string; token: string }) {
 
       <div className="flex flex-col gap-2">
         {loads.map(l => (
-          <div key={l.id} className="rounded-xl p-3" style={{ background: '#232326', border: '0.5px solid #2a2a2a' }}>
+          <div key={l.id} className="rounded-xl p-3" style={{ background: 'var(--surface)', border: '0.5px solid var(--border)' }}>
             <div className="flex justify-between items-center">
-              <p className="text-sm font-medium" style={{ color: '#fff' }}>Load {l.load_number}{l.description ? ` — ${l.description}` : ''}</p>
-              <span className="text-xs px-2 py-0.5 rounded-full" style={{ border: `0.5px solid ${l.dispatched_at ? '#97C459' : '#555'}`, color: l.dispatched_at ? '#97C459' : '#777' }}>
+              <p className="text-sm font-medium" style={{ color: 'var(--foreground)' }}>Load {l.load_number}{l.description ? ` — ${l.description}` : ''}</p>
+              <span className="text-xs px-2 py-0.5 rounded-full" style={{ border: `0.5px solid ${l.dispatched_at ? 'var(--success)' : 'var(--border)'}`, color: l.dispatched_at ? 'var(--success)' : 'var(--text-2)' }}>
                 {l.dispatched_at ? `dispatched ${l.dispatched_at.slice(0, 10)}` : 'pending'}
               </span>
             </div>
-            <p className="text-xs mt-1" style={{ color: '#555' }}>{l.fab_marks?.length ?? 0} marks</p>
+            <p className="text-xs mt-1" style={{ color: 'var(--text-2)' }}>{l.fab_marks?.length ?? 0} marks</p>
             {!l.dispatched_at && (
               <div className="flex gap-2 mt-2">
                 <button onClick={() => assign(l.id)} disabled={!selected.size} style={{ ...chip, opacity: selected.size ? 1 : .5 }}>Assign selected ({selected.size})</button>
-                <button onClick={() => dispatchLoad(l.id)} style={{ ...chip, borderColor: '#97C459', color: '#97C459' }}>Mark dispatched</button>
+                <button onClick={() => dispatchLoad(l.id)} style={{ ...chip, borderColor: 'var(--success)', color: 'var(--success)' }}>Mark dispatched</button>
               </div>
             )}
           </div>
         ))}
-        {loads.length === 0 && <p className="text-sm text-center py-4" style={{ color: '#555' }}>No loads yet.</p>}
+        {loads.length === 0 && <p className="text-sm text-center py-4" style={{ color: 'var(--text-2)' }}>No loads yet.</p>}
       </div>
     </div>
   )
@@ -755,19 +755,19 @@ function TimeLogTab({ jobId, token }: { jobId: string; token: string }) {
 
   return (
     <div>
-      <div className="rounded-xl p-3 mb-4" style={{ background: '#232326', border: '0.5px solid #2a2a2a' }}>
+      <div className="rounded-xl p-3 mb-4" style={{ background: 'var(--surface)', border: '0.5px solid var(--border)' }}>
         <div className="grid grid-cols-2 gap-2 mb-2">
-          <div><label className="text-xs block mb-1" style={{ color: '#555' }}>Worker</label>
+          <div><label className="text-xs block mb-1" style={{ color: 'var(--text-2)' }}>Worker</label>
             <input placeholder="Name" value={form.worker_name} onChange={e => setForm(f => ({ ...f, worker_name: e.target.value }))} /></div>
-          <div><label className="text-xs block mb-1" style={{ color: '#555' }}>Hours</label>
+          <div><label className="text-xs block mb-1" style={{ color: 'var(--text-2)' }}>Hours</label>
             <input type="number" min="0" step="0.5" placeholder="0" value={form.hours} onChange={e => setForm(f => ({ ...f, hours: e.target.value }))} /></div>
-          <div><label className="text-xs block mb-1" style={{ color: '#555' }}>Date</label>
+          <div><label className="text-xs block mb-1" style={{ color: 'var(--text-2)' }}>Date</label>
             <input type="date" value={form.work_date} onChange={e => setForm(f => ({ ...f, work_date: e.target.value }))} /></div>
-          <div><label className="text-xs block mb-1" style={{ color: '#555' }}>Note</label>
+          <div><label className="text-xs block mb-1" style={{ color: 'var(--text-2)' }}>Note</label>
             <input placeholder="Optional" value={form.note} onChange={e => setForm(f => ({ ...f, note: e.target.value }))} /></div>
         </div>
         <div className="mb-2">
-          <label className="text-xs block mb-1" style={{ color: '#555' }}>Task (optional — attributes the hours to the productivity matrix)</label>
+          <label className="text-xs block mb-1" style={{ color: 'var(--text-2)' }}>Task (optional — attributes the hours to the productivity matrix)</label>
           <select value={form.task_id} onChange={e => setForm(f => ({ ...f, task_id: e.target.value }))} className="w-full">
             <option value="">— general job time —</option>
             {tasks.map(t => <option key={t.id} value={t.id}>{t.description}</option>)}
@@ -775,27 +775,27 @@ function TimeLogTab({ jobId, token }: { jobId: string; token: string }) {
         </div>
         <button onClick={addEntry} disabled={saving || !form.worker_name.trim() || !parseFloat(form.hours)}
           className="w-full rounded-lg text-sm font-medium"
-          style={{ background: '#FFCB05', color: '#231F20', padding: '8px', border: 'none', opacity: saving || !form.worker_name.trim() ? .5 : 1 }}>
+          style={{ background: 'var(--hytek-yellow)', color: 'var(--on-brand)', padding: '8px', border: 'none', opacity: saving || !form.worker_name.trim() ? .5 : 1 }}>
           Log time
         </button>
       </div>
 
-      <div className="flex justify-between text-xs mb-2" style={{ color: '#555' }}>
+      <div className="flex justify-between text-xs mb-2" style={{ color: 'var(--text-2)' }}>
         <span>{entries.length} entries</span>
         <span>Total: {totalHours.toFixed(1)} hrs</span>
       </div>
 
       <div className="flex flex-col gap-1">
         {entries.map(e => (
-          <div key={e.id} className="rounded-lg p-2 flex justify-between items-center" style={{ background: '#232326', border: '0.5px solid #2a2a2a' }}>
+          <div key={e.id} className="rounded-lg p-2 flex justify-between items-center" style={{ background: 'var(--surface)', border: '0.5px solid var(--border)' }}>
             <div>
-              <p className="text-sm" style={{ color: '#fff' }}>{e.worker_name}</p>
-              <p className="text-xs" style={{ color: '#555' }}>{e.work_date} {e.note ? `· ${e.note}` : ''}</p>
+              <p className="text-sm" style={{ color: 'var(--foreground)' }}>{e.worker_name}</p>
+              <p className="text-xs" style={{ color: 'var(--text-2)' }}>{e.work_date} {e.note ? `· ${e.note}` : ''}</p>
             </div>
-            <span className="text-sm font-medium" style={{ color: '#FFCB05' }}>{e.hours} hrs</span>
+            <span className="text-sm font-medium" style={{ color: 'var(--foreground)', fontWeight: 700 }}>{e.hours} hrs</span>
           </div>
         ))}
-        {entries.length === 0 && <p className="text-sm text-center py-4" style={{ color: '#555' }}>No time entries yet.</p>}
+        {entries.length === 0 && <p className="text-sm text-center py-4" style={{ color: 'var(--text-2)' }}>No time entries yet.</p>}
       </div>
     </div>
   )
@@ -847,7 +847,7 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
   }
 
   if (loading || !user) return null
-  if (!job) return <AppShell><div className="p-6 text-center" style={{ color: '#555' }}>Loading…</div></AppShell>
+  if (!job) return <AppShell><div className="p-6 text-center" style={{ color: 'var(--text-2)' }}>Loading…</div></AppShell>
 
   const pct = job.tonnage_pct
   const taskPct = job.task_count ? Math.round((job.task_done / job.task_count) * 100) : 0
@@ -868,37 +868,37 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
       <div className="p-4 max-w-2xl mx-auto">
         {/* Header */}
         <div className="mb-4">
-          <button onClick={() => router.push('/shop')} className="text-xs mb-2 block" style={{ background: 'none', border: 'none', color: '#555', padding: 0 }}>
+          <button onClick={() => router.push('/shop')} className="text-xs mb-2 block" style={{ background: 'none', border: 'none', color: 'var(--text-2)', padding: 0 }}>
             ← Shop
           </button>
           <div className="flex justify-between items-start mb-1">
-            <span className="text-xs font-medium" style={{ color: '#FFCB05' }}>{job.quote_number}</span>
+            <span className="text-xs font-medium" style={{ color: 'var(--foreground)', fontWeight: 700 }}>{job.quote_number}</span>
             {job.dispatch_requested_at && (
-              <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: 'rgba(99,153,34,.15)', color: '#97C459', border: '0.5px solid rgba(99,153,34,.3)' }}>
+              <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: 'var(--chip-success-bg)', color: 'var(--success)', border: '0.5px solid var(--success)' }}>
                 Dispatch ready
               </span>
             )}
           </div>
-          <p className="text-base font-semibold mb-0.5" style={{ color: '#fff' }}>{job.name}</p>
-          <p className="text-xs mb-2" style={{ color: '#666' }}>{job.client ?? '—'} {job.on_site_date ? `· On site ${job.on_site_date}` : ''}</p>
-          <div className="flex gap-4 text-xs mb-3 flex-wrap" style={{ color: '#555' }}>
-            <span style={{ color: '#fff' }}>{kgToTonnes(job.made_kg)} / {kgToTonnes(job.total_kg)} t · {pct}%</span>
+          <p className="text-base font-semibold mb-0.5" style={{ color: 'var(--foreground)' }}>{job.name}</p>
+          <p className="text-xs mb-2" style={{ color: 'var(--text-2)' }}>{job.client ?? '—'} {job.on_site_date ? `· On site ${job.on_site_date}` : ''}</p>
+          <div className="flex gap-4 text-xs mb-3 flex-wrap" style={{ color: 'var(--text-2)' }}>
+            <span style={{ color: 'var(--foreground)' }}>{kgToTonnes(job.made_kg)} / {kgToTonnes(job.total_kg)} t · {pct}%</span>
             <span>{job.task_done}/{job.task_count} tasks ({taskPct}%)</span>
             <span>{job.mark_done}/{job.mark_count} marks</span>
             <span>{(job.total_hours ?? 0).toFixed(1)} h</span>
           </div>
-          <div className="rounded-full h-1 mb-1" style={{ background: '#2a2a2a' }}>
-            <div className="h-full rounded-full" style={{ background: '#FFCB05', width: `${pct}%` }} />
+          <div className="rounded-full h-1 mb-1" style={{ background: 'var(--track)' }}>
+            <div className="h-full rounded-full" style={{ background: 'var(--hytek-yellow)', width: `${pct}%` }} />
           </div>
           {job.marks_missing_weight > 0 && (
-            <p className="text-xs mb-3" style={{ color: '#C9803A' }}>
+            <p className="text-xs mb-3" style={{ color: 'var(--warning)' }}>
               {job.marks_missing_weight} mark(s) missing weight — tonnage may be understated
             </p>
           )}
 
           {canDispatch && (
             <button onClick={dispatch} disabled={dispatching} className="w-full rounded-lg text-sm font-medium"
-              style={{ background: dispatching ? '#333' : '#97C459', color: dispatching ? '#555' : '#fff', padding: '10px', border: 'none', fontWeight: 600 }}>
+              style={{ background: dispatching ? 'var(--border)' : 'var(--success)', color: dispatching ? 'var(--text-2)' : 'var(--foreground)', padding: '10px', border: 'none', fontWeight: 600 }}>
               {dispatching ? 'Marking complete…' : 'Mark fab complete + alert Dispatch'}
             </button>
           )}
@@ -910,9 +910,9 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
             <button key={t.id} onClick={() => setTab(t.id)}
               className="text-xs px-3 py-1.5 rounded-lg flex-shrink-0"
               style={{
-                background: tab === t.id ? '#FFCB05' : '#1e1e21',
-                color: tab === t.id ? '#231F20' : '#777',
-                border: tab === t.id ? 'none' : '0.5px solid #2a2a2a',
+                background: tab === t.id ? 'var(--hytek-yellow)' : 'var(--surface)',
+                color: tab === t.id ? 'var(--on-brand)' : 'var(--text-2)',
+                border: tab === t.id ? 'none' : '0.5px solid var(--border)',
                 fontWeight: tab === t.id ? 600 : 400,
               }}>
               {t.label}

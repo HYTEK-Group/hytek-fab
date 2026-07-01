@@ -23,10 +23,10 @@ interface JobSummary extends FabJob {
 
 function statusBadge(j: JobSummary) {
   if (j.status === 'complete' || j.dispatch_requested_at)
-    return { label: 'Dispatch ready', color: '#97C459', bg: 'rgba(99,153,34,.2)' }
+    return { label: 'Dispatch ready', color: 'var(--success)', bg: 'var(--chip-success-bg)' }
   if (j.has_active_packages)
-    return { label: 'At contractor', color: '#85B7EB', bg: 'rgba(55,138,221,.2)' }
-  return { label: 'In progress', color: '#FFCB05', bg: 'rgba(255,203,5,.15)' }
+    return { label: 'At contractor', color: 'var(--info)', bg: 'var(--chip-info-bg)' }
+  return { label: 'In progress', color: 'var(--on-brand)', bg: 'var(--chip-brand-bg)' }
 }
 
 export default function ShopPage() {
@@ -69,31 +69,31 @@ export default function ShopPage() {
             { label: 'Dispatch ready', value: dispatchReady.length, highlight: dispatchReady.length > 0 },
             { label: 'Total tonnes (all)', value: kgToTonnes(jobs.reduce((s, j) => s + j.total_kg, 0)).toFixed(1) },
           ].map(s => (
-            <div key={s.label} className="rounded-xl p-3" style={{ background: '#1e1e21', border: '0.5px solid #2a2a2a' }}>
-              <p className="text-xs mb-1" style={{ color: '#555' }}>{s.label}</p>
-              <p className="text-xl font-medium" style={{ color: s.highlight ? '#97C459' : '#fff' }}>{s.value}</p>
+            <div key={s.label} className="rounded-xl p-3" style={{ background: 'var(--surface)', border: '0.5px solid var(--border)' }}>
+              <p className="text-xs mb-1" style={{ color: 'var(--text-2)' }}>{s.label}</p>
+              <p className="text-xl font-medium" style={{ color: s.highlight ? 'var(--success)' : 'var(--foreground)' }}>{s.value}</p>
             </div>
           ))}
         </div>
 
         {/* Alerts */}
         {dispatchReady.length > 0 && (
-          <div className="rounded-xl p-3 mb-4 flex gap-2" style={{ background: 'rgba(99,153,34,.1)', border: '0.5px solid rgba(99,153,34,.3)' }}>
-            <span style={{ color: '#97C459' }}>✓</span>
-            <p className="text-sm" style={{ color: '#97C459' }}>
-              <strong style={{ color: '#fff' }}>{dispatchReady.map(j => j.name).join(', ')}</strong> — fab complete, dispatch alerted
+          <div className="rounded-xl p-3 mb-4 flex gap-2" style={{ background: 'var(--chip-success-bg)', border: '0.5px solid var(--success)' }}>
+            <span style={{ color: 'var(--success)' }}>✓</span>
+            <p className="text-sm" style={{ color: 'var(--success)' }}>
+              <strong style={{ color: 'var(--foreground)' }}>{dispatchReady.map(j => j.name).join(', ')}</strong> — fab complete, dispatch alerted
             </p>
           </div>
         )}
 
         {/* Jobs */}
-        <p className="text-xs mb-2" style={{ color: '#555', textTransform: 'uppercase', letterSpacing: '.07em' }}>
+        <p className="text-xs mb-2" style={{ color: 'var(--text-2)', textTransform: 'uppercase', letterSpacing: '.07em' }}>
           {fetching ? 'Loading…' : `${active.length} active job${active.length !== 1 ? 's' : ''}`}
         </p>
 
         {jobs.length === 0 && !fetching && (
-          <div className="rounded-xl p-6 text-center" style={{ background: '#1e1e21', border: '0.5px solid #2a2a2a' }}>
-            <p style={{ color: '#555' }}>No active fab jobs. Check the Ready queue.</p>
+          <div className="rounded-xl p-6 text-center" style={{ background: 'var(--surface)', border: '0.5px solid var(--border)' }}>
+            <p style={{ color: 'var(--text-2)' }}>No active fab jobs. Check the Ready queue.</p>
           </div>
         )}
 
@@ -106,23 +106,23 @@ export default function ShopPage() {
                 key={job.id}
                 onClick={() => router.push(`/jobs/${job.id}`)}
                 className="rounded-xl p-3 text-left w-full"
-                style={{ background: '#1e1e21', border: '0.5px solid #2a2a2a' }}
+                style={{ background: 'var(--surface)', border: '0.5px solid var(--border)' }}
               >
                 <div className="flex justify-between items-center mb-1">
-                  <span className="text-xs font-medium" style={{ color: '#FFCB05' }}>{job.quote_number}</span>
+                  <span className="text-xs font-medium" style={{ color: 'var(--foreground)', fontWeight: 700 }}>{job.quote_number}</span>
                   <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: badge.bg, color: badge.color }}>{badge.label}</span>
                 </div>
-                <p className="text-sm font-medium mb-0.5 truncate" style={{ color: '#fff' }}>{job.name}</p>
-                <p className="text-xs mb-2 truncate" style={{ color: '#666' }}>{job.client ?? '—'}</p>
-                <div className="rounded-full h-1 mb-1" style={{ background: '#2a2a2a' }}>
-                  <div className="h-full rounded-full" style={{ background: '#FFCB05', width: `${pct}%` }} />
+                <p className="text-sm font-medium mb-0.5 truncate" style={{ color: 'var(--foreground)' }}>{job.name}</p>
+                <p className="text-xs mb-2 truncate" style={{ color: 'var(--text-2)' }}>{job.client ?? '—'}</p>
+                <div className="rounded-full h-1 mb-1" style={{ background: 'var(--track)' }}>
+                  <div className="h-full rounded-full" style={{ background: 'var(--hytek-yellow)', width: `${pct}%` }} />
                 </div>
-                <div className="flex justify-between text-xs" style={{ color: '#555' }}>
+                <div className="flex justify-between text-xs" style={{ color: 'var(--text-2)' }}>
                   <span>{kgToTonnes(job.made_kg)} / {kgToTonnes(job.total_kg)} t · {pct}%</span>
                   <span>{job.on_site_date ?? '—'}</span>
                 </div>
                 {job.marks_missing_weight > 0 && (
-                  <p className="text-xs mt-1" style={{ color: '#C9803A' }}>
+                  <p className="text-xs mt-1" style={{ color: 'var(--warning)' }}>
                     {job.marks_missing_weight} mark(s) missing weight
                   </p>
                 )}
