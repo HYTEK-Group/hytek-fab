@@ -48,6 +48,13 @@ CREATE TRIGGER fab_proof_photos_lock
   BEFORE UPDATE OR DELETE ON public.fab_proof_photos
   FOR EACH ROW EXECUTE FUNCTION public.fab_proof_photos_no_mutate();
 
+-- TRUNCATE does not fire row-level triggers, so guard it too (statement-level) —
+-- otherwise the service role could wipe the whole evidence log. Same as dispatch.
+DROP TRIGGER IF EXISTS fab_proof_photos_no_truncate ON public.fab_proof_photos;
+CREATE TRIGGER fab_proof_photos_no_truncate
+  BEFORE TRUNCATE ON public.fab_proof_photos
+  FOR EACH STATEMENT EXECUTE FUNCTION public.fab_proof_photos_no_mutate();
+
 -- ── RLS: authenticated read; service_role writes (API routes). ────────────────
 ALTER TABLE public.fab_proof_photos ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS fab_proof_photos_select_auth ON public.fab_proof_photos;

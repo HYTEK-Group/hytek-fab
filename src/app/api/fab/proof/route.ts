@@ -35,6 +35,14 @@ export async function POST(req: NextRequest) {
   const { data: job } = await admin.from('fab_jobs').select('id').eq('id', jobId).single()
   if (!job) return NextResponse.json({ error: 'Job not found' }, { status: 404 })
 
+  // any referenced mark/package/load must belong to this job (no cross-job attribution)
+  for (const [table, refId] of [['fab_marks', markId], ['fab_contractor_packages', packageId], ['fab_dispatch_loads', loadId]] as const) {
+    if (refId) {
+      const { data } = await admin.from(table).select('id').eq('id', refId).eq('fab_job_id', jobId).single()
+      if (!data) return NextResponse.json({ error: `${table} not in this job` }, { status: 400 })
+    }
+  }
+
   const ext = (file.name.match(/\.[a-z0-9]+$/i)?.[0] ?? '.jpg').toLowerCase()
   const path = `${jobId}/${stage}/${randomUUID()}${ext}`
   const buf = Buffer.from(await file.arrayBuffer())
