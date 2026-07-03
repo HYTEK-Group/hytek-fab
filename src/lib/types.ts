@@ -98,6 +98,26 @@ export interface FabMark {
   updated_at: string
 }
 
+// ── fab_proof_photos (append-only proof-of-work chain, sql/007) ──────────────
+
+export type ProofStage = 'made' | 'treatment_out' | 'treatment_in' | 'bundled' | 'loaded'
+
+export interface FabProofPhoto {
+  id: string
+  fab_job_id: string
+  fab_mark_id: string | null
+  fab_package_id: string | null
+  fab_load_id: string | null
+  stage: ProofStage
+  treatment_type: string | null
+  storage_path: string
+  file_name: string | null
+  caption: string | null
+  taken_by: string
+  taken_at: string
+  created_at: string
+}
+
 // A mark enriched with its learned time suggestion (for the assign view).
 export interface AssemblyRow extends FabMark {
   suggestion: {

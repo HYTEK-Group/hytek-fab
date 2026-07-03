@@ -5,11 +5,12 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/auth-context'
 import { AppShell } from '@/components/app-shell'
 import { AssembliesTab } from '@/components/assemblies-tab'
+import { ProofTab } from '@/components/proof-tab'
 import { supabase } from '@/lib/supabase'
 import { kgToTonnes } from '@/lib/fab-tonnage'
 import type { FabJob, FabTask, FabMark, FabTimeEntry } from '@/lib/types'
 
-type Tab = 'assemblies' | 'tasks' | 'marks' | 'drawings' | 'packages' | 'qc' | 'dispatch' | 'timelog'
+type Tab = 'assemblies' | 'tasks' | 'marks' | 'drawings' | 'packages' | 'qc' | 'dispatch' | 'proof' | 'timelog'
 
 interface JobDetail extends FabJob {
   task_count: number
@@ -808,7 +809,7 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
   const { user, loading } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
-  const validTabs: Tab[] = ['assemblies', 'tasks', 'marks', 'drawings', 'packages', 'qc', 'dispatch', 'timelog']
+  const validTabs: Tab[] = ['assemblies', 'tasks', 'marks', 'drawings', 'packages', 'qc', 'dispatch', 'proof', 'timelog']
   const tabParam = searchParams.get('tab') as Tab | null
   const [job, setJob] = useState<JobDetail | null>(null)
   const [tab, setTab] = useState<Tab>(tabParam && validTabs.includes(tabParam) ? tabParam : 'assemblies')
@@ -862,6 +863,7 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
     { id: 'packages', label: 'Packages' },
     { id: 'qc', label: 'QC' },
     { id: 'dispatch', label: 'Dispatch' },
+    { id: 'proof', label: 'Proof' },
     { id: 'timelog', label: 'Time' },
   ]
 
@@ -931,6 +933,7 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
           {tab === 'packages' && <PackagesTab jobId={id} token={token} />}
           {tab === 'qc' && <QCTab jobId={id} token={token} />}
           {tab === 'dispatch' && <DispatchTab jobId={id} token={token} />}
+          {tab === 'proof' && <ProofTab jobId={id} token={token} role={role} />}
           {tab === 'timelog' && <TimeLogTab jobId={id} token={token} />}
         </>}
       </div>

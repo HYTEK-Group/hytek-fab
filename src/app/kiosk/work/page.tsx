@@ -5,12 +5,13 @@
 // suggestions) and shows the drawing for each piece. Auto-signs-out after 30 min idle.
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import { PhotoCapture } from '@/components/photo-capture'
 
 const IDLE_MS = 30 * 60 * 1000
 
 interface Session { worker_name: string; role: string; token: string; signed_in_at: number }
 interface WorkItem {
-  id: string; mark_id: string; description: string | null; section: string | null
+  id: string; fab_job_id: string; mark_id: string; description: string | null; section: string | null
   weight_kg: number | null; quantity: number; status: string
   allotted_minutes: number | null; actual_minutes: number | null
   quote_number: string | null; job_name: string | null
@@ -112,6 +113,11 @@ export default function KioskWorkPage() {
                     {' · '}
                     <button onClick={() => openDrawing(m.id)} style={drawLink}>drawing</button>
                   </div>
+                  {session && (
+                    <div style={{ marginTop: 6 }}>
+                      <PhotoCapture jobId={m.fab_job_id} token={session.token} stage="made" markId={m.id} label="photo of finished piece" variant="small" />
+                    </div>
+                  )}
                 </div>
                 {done ? (
                   <span style={{ color: 'var(--success)', fontSize: 26, fontWeight: 700 }}>✓</span>
