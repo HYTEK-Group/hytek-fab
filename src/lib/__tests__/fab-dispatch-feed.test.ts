@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   buildDispatchFeed,
   type DispatchFeedJob, type DispatchFeedLoad, type DispatchFeedMark,
+  type DispatchFeedPackage,
 } from '../fab-dispatch-feed'
 
 const job = (p: Partial<DispatchFeedJob>): DispatchFeedJob => ({
@@ -89,5 +90,58 @@ describe('buildDispatchFeed', () => {
       ],
     )
     expect(feed[0].loads[0].tonnes).toBe(0)
+  })
+
+  // ── subcontractor drop-ship (sub_certified + pickups) ──────────────────────
+
+  const pkg = (p: Partial<DispatchFeedPackage>): DispatchFeedPackage => ({
+    id: 'P1', fab_job_id: 'J1', contractor_name: 'Precision Steel',
+    contractor_contact: '0400 000 000', delivery_mode: 'drop_ship',
+    drop_ship_released_at: '2026-07-04T00:00:00Z', ...p,
+  })
+
+  it('drop-ship steel surfaces under pickups ONLY, never double-counted in tonnes_ready', () => {
+    const feed = buildDispatchFeed(
+      [job({ dispatch_requested_at: 'x' })], [],
+      [
+        mark({ mark_id: 'S1', status: 'sub_certified', weight_kg: 300, quantity: 2, contractor_package_id: 'P1' }),
+        mark({ mark_id: 'X1', status: 'at_contractor', contractor_package_id: 'P1' }), // still being made
+      ],
+      [pkg({})],
+    )
+    // sub_certified steel is a sub-yard pickup, NOT factory-floor ready tonnage
+    expect(feed[0].unassigned_ready).toHaveLength(0)
+    expect(feed[0].tonnes_ready).toBe(0)
+    expect(feed[0].pickups).toHaveLength(1)
+    expect(feed[0].pickups[0].tonnes).toBe(0.6)
+  })
+
+  it('in-house qc_passed steel still lists as unassigned_ready alongside drop-ship pickups', () => {
+    const feed = buildDispatchFeed(
+      [job({})], [],
+      [
+        mark({ mark_id: 'H1', status: 'qc_passed', weight_kg: 500, quantity: 1, dispatch_load_id: null }), // in-house
+        mark({ mark_id: 'S1', status: 'sub_certified', weight_kg: 300, quantity: 2, contractor_package_id: 'P1' }),
+        mark({ mark_id: 'S2', status: 'sub_certified', weight_kg: 100, quantity: 1, contractor_package_id: 'P1' }),
+      ],
+      [pkg({})],
+    )
+    expect(feed[0].unassigned_ready.map(m => m.mark_id)).toEqual(['H1']) // in-house only
+    expect(feed[0].tonnes_ready).toBe(0.5)
+    expect(feed[0].pickups[0].contractor_name).toBe('Precision Steel')
+    expect(feed[0].pickups[0].tonnes).toBe(0.7)
+    expect(feed[0].pickups[0].pieces).toBe(3)
+  })
+
+  it('shows NO pickup for unreleased or return-to-brisbane packages', () => {
+    const feed = buildDispatchFeed(
+      [job({ dispatch_requested_at: 'x' })], [],
+      [mark({ mark_id: 'S1', status: 'at_contractor', contractor_package_id: 'P1' })],
+      [
+        pkg({ id: 'P1', drop_ship_released_at: null }),                     // not released yet
+        pkg({ id: 'P2', delivery_mode: 'return_to_brisbane' }),             // comes back to us
+      ],
+    )
+    expect(feed[0].pickups).toHaveLength(0)
   })
 })

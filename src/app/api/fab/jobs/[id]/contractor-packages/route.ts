@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { getUserCaller, getSupervisorCaller } from '@/lib/fab-auth'
 import { computeAndUpsertProgress } from '@/lib/fab-progress'
-import type { PackageType, TreatmentType } from '@/lib/types'
+import type { DeliveryMode, PackageType, TreatmentType } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
 
@@ -33,9 +33,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     contractor_contact?: string | null
     scope_note?: string | null
     expected_return_date?: string | null
+    delivery_mode?: DeliveryMode
   }
   if (!body.contractor_name?.trim()) {
     return NextResponse.json({ error: 'contractor_name required' }, { status: 400 })
+  }
+  if (body.delivery_mode !== undefined && !['return_to_brisbane', 'drop_ship'].includes(body.delivery_mode)) {
+    return NextResponse.json({ error: 'invalid delivery_mode' }, { status: 400 })
   }
   const admin = getSupabaseAdmin()
   const { data, error } = await admin
@@ -48,6 +52,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       contractor_contact: body.contractor_contact ?? null,
       scope_note: body.scope_note ?? null,
       expected_return_date: body.expected_return_date ?? null,
+      delivery_mode: body.delivery_mode || 'return_to_brisbane',
       status: 'pending',
       created_by: caller.name,
     })

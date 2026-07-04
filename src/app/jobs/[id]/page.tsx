@@ -6,6 +6,7 @@ import { useAuth } from '@/lib/auth-context'
 import { AppShell } from '@/components/app-shell'
 import { AssembliesTab } from '@/components/assemblies-tab'
 import { ProofTab } from '@/components/proof-tab'
+import { SubPackagePanel } from '@/components/sub-package-panel'
 import { supabase } from '@/lib/supabase'
 import { kgToTonnes } from '@/lib/fab-tonnage'
 import type { FabJob, FabTask, FabMark, FabTimeEntry } from '@/lib/types'
@@ -283,7 +284,7 @@ function MarksTab({ jobId, token }: { jobId: string; token: string }) {
 
   const statusColor = (s: FabMark['status']) => {
     const map: Record<FabMark['status'], string> = {
-      not_started: 'var(--text-2)', in_progress: 'var(--hytek-yellow)', done: 'var(--success)', at_contractor: 'var(--info)', returned: 'var(--accent)', qc_passed: 'var(--success)'
+      not_started: 'var(--text-2)', in_progress: 'var(--hytek-yellow)', done: 'var(--success)', at_contractor: 'var(--info)', returned: 'var(--accent)', qc_passed: 'var(--success)', sub_certified: 'var(--success)'
     }
     return map[s] ?? 'var(--text-2)'
   }
@@ -930,7 +931,7 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
           {tab === 'tasks' && <TasksTab jobId={id} token={token} role={role} />}
           {tab === 'marks' && <MarksTab jobId={id} token={token} />}
           {tab === 'drawings' && <DrawingsTab jobId={id} token={token} />}
-          {tab === 'packages' && <PackagesTab jobId={id} token={token} />}
+          {tab === 'packages' && <><PackagesTab jobId={id} token={token} /><SubPackagePanel jobId={id} token={token} role={role} /></>}
           {tab === 'qc' && <QCTab jobId={id} token={token} />}
           {tab === 'dispatch' && <DispatchTab jobId={id} token={token} />}
           {tab === 'proof' && <ProofTab jobId={id} token={token} role={role} />}

@@ -67,6 +67,7 @@ export interface FabTask {
 
 export type MarkStatus =
   | 'not_started' | 'in_progress' | 'done' | 'at_contractor' | 'returned' | 'qc_passed'
+  | 'sub_certified' // drop-ship: sub certs accepted by supervisor — dispatch-ready without in-house QC
 
 export interface FabMark {
   id: string
@@ -221,6 +222,9 @@ export type PackageType = 'fabrication' | 'treatment' | 'other'
 export type TreatmentType = 'hdg' | 'etch_primer' | 'powder_coat' | 'two_pack' | 'other'
 export type ContractorPackageStatus =
   | 'pending' | 'sent' | 'in_progress' | 'returned' | 'inspected'
+/** How the package's steel reaches site (sql/008). Drop-ship skips in-house QC,
+ *  so it needs sub certs + a supervisor release before dispatch. */
+export type DeliveryMode = 'return_to_brisbane' | 'drop_ship'
 
 export interface FabContractorPackage {
   id: string
@@ -234,9 +238,55 @@ export interface FabContractorPackage {
   expected_return_date: string | null
   returned_at: string | null
   status: ContractorPackageStatus
+  delivery_mode: DeliveryMode
+  /** Sub tapped "ready to collect" (sql/008). */
+  ready_at: string | null
+  /** Supervisor accepted the drop-ship (certs sighted) — marks became sub_certified. */
+  drop_ship_released_at: string | null
+  drop_ship_released_by: string | null
   created_by: string
   created_at: string
   updated_at: string
+}
+
+// ── fab_sub_accounts + fab_sub_grants (subcontractor guest access, sql/008) ──
+
+export interface FabSubAccount {
+  id: string
+  contractor_name: string
+  login_slug: string
+  /** bcrypt hash; null until the sub sets a PIN on first open. NEVER sent to a client. */
+  pin_hash: string | null
+  is_active: boolean
+  created_by: string
+  created_at: string
+  updated_at: string
+}
+
+export interface FabSubGrant {
+  id: string
+  sub_account_id: string
+  package_id: string
+  granted_by: string
+  granted_at: string
+  revoked_at: string | null
+}
+
+// ── fab_package_certs (append-only QA/mill/weld/coating certs, sql/008) ──────
+
+export type CertKind = 'qa' | 'weld' | 'mill' | 'coating' | 'itp' | 'other'
+
+export interface FabPackageCert {
+  id: string
+  fab_package_id: string
+  fab_job_id: string
+  kind: CertKind
+  storage_path: string
+  file_name: string | null
+  note: string | null
+  uploaded_by: string
+  uploaded_at: string
+  created_at: string
 }
 
 export interface FabContractorUpdate {
