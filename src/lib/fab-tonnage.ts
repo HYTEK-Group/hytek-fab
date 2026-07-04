@@ -1,8 +1,8 @@
 // Tonnage rollups for a job's marks. Progress here is weight-driven, not
 // count-driven — a 407 kg column must not weigh the same as a 14 kg base
-// plate. "Made" = a mark that's been fabricated (status `done`) or fully
-// approved (`qc_passed`). weight_kg is per-piece, so a mark of quantity N
-// contributes weight_kg * N.
+// plate. "Made" = a mark that's been fabricated (status `done`), fully
+// approved (`qc_passed`), or drop-ship released on sub certs (`sub_certified`).
+// weight_kg is per-piece, so a mark of quantity N contributes weight_kg * N.
 
 export interface TonnageMark {
   status: string
@@ -17,7 +17,7 @@ export interface TonnageSummary {
   missing_weight: number // marks with no/zero weight (tonnage undercount risk)
 }
 
-const MADE = new Set(['done', 'qc_passed'])
+const MADE = new Set(['done', 'qc_passed', 'sub_certified'])
 
 export function tonnageSummary(marks: TonnageMark[]): TonnageSummary {
   let total = 0

@@ -55,7 +55,9 @@ describe('computeProgressRow', () => {
       id: 'p1', fab_job_id: 'job-1', package_type: 'treatment',
       treatment_type: 'hdg', contractor_name: 'QLD Galv', contractor_contact: null,
       scope_note: 'HDG columns', sent_at: '2026-06-20', expected_return_date: '2026-06-27',
-      returned_at: null, status: 'sent', created_by: 'sup', created_at: '', updated_at: '',
+      returned_at: null, status: 'sent', delivery_mode: 'return_to_brisbane',
+      ready_at: null, drop_ship_released_at: null, drop_ship_released_by: null,
+      created_by: 'sup', created_at: '', updated_at: '',
     }
     const marks = [
       mark({ id: '1', status: 'at_contractor', contractor_package_id: 'p1' }),

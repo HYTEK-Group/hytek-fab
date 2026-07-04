@@ -25,16 +25,19 @@ export function computeProgressRow(
 ): FabProgressRow {
   const total = marks.length
   const qcPassed = marks.filter(m => m.status === 'qc_passed')
-  // pct_complete is tonnage-weighted (made = done|qc_passed by weight), so a
-  // heavy column counts for more than a light base plate. marks_qc_passed below
-  // still carries the QC-approved count for anyone who wants that view.
+  // Approved for dispatch = passed in-house QC OR drop-ship released on sub
+  // certs (sub_certified). marks_qc_passed below stays honest — in-house QC
+  // passes only — while tonnes/status use the approved set.
+  const approved = marks.filter(m => m.status === 'qc_passed' || m.status === 'sub_certified')
+  // pct_complete is tonnage-weighted (made = done|qc_passed|sub_certified by
+  // weight), so a heavy column counts for more than a light base plate.
   const pct = tonnageSummary(marks).pct
 
-  // Tonnes for the Hub feed: total = all marks; complete = QC-passed only
-  // (the Hub's "complete"/approved semantic). weight is per-one × quantity.
+  // Tonnes for the Hub feed: total = all marks; complete = approved for
+  // dispatch (the Hub's "complete" semantic). weight is per-one × quantity.
   const kg = (m: FabMark) => Math.max(0, m.weight_kg ?? 0) * (m.quantity ?? 1)
   const tonnesTotal = Math.round((marks.reduce((s, m) => s + kg(m), 0) / 1000) * 100) / 100
-  const tonnesComplete = Math.round((qcPassed.reduce((s, m) => s + kg(m), 0) / 1000) * 100) / 100
+  const tonnesComplete = Math.round((approved.reduce((s, m) => s + kg(m), 0) / 1000) * 100) / 100
 
   const inhouse = marks.filter(m => !m.contractor_package_id)
   const inhouseComplete = inhouse.filter(
@@ -52,7 +55,8 @@ export function computeProgressRow(
   const packageSummaries: FabProgressPackageSummary[] = packages.map(pkg => {
     const pkgMarks = marks.filter(m => m.contractor_package_id === pkg.id)
     const done = pkgMarks.filter(
-      m => m.status === 'returned' || m.status === 'qc_passed' || m.status === 'done',
+      m => m.status === 'returned' || m.status === 'qc_passed' || m.status === 'done'
+        || m.status === 'sub_certified',
     ).length
     const pkgUpdates = (updatesByPkg.get(pkg.id) ?? [])
       .slice()
@@ -95,9 +99,9 @@ export function computeProgressRow(
     const allDispatched = marks.every(
       m => m.dispatch_load_id && dispatchedLoadIds.has(m.dispatch_load_id),
     )
-    const allQcPassed = qcPassed.length === total
+    const allApproved = approved.length === total
     if (allDispatched) status = 'dispatched'
-    else if (allQcPassed) status = 'dispatch_ready'
+    else if (allApproved) status = 'dispatch_ready'
     else status = 'in_progress'
   }
 
