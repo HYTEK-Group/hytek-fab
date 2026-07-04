@@ -24,11 +24,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     router.push('/login')
   }
 
-  // Worker/PIN roster is admin/supervisor only.
+  // Worker/PIN roster + subcontractor access are admin/supervisor only.
   const navItems = [
     ...NAV,
     ...(profile?.role === 'admin' || profile?.role === 'supervisor'
-      ? [{ href: '/admin/workers', label: 'Workers', icon: '☷' }]
+      ? [
+          { href: '/subs', label: 'Subs', icon: '⇄' },
+          { href: '/admin/workers', label: 'Workers', icon: '☷' },
+        ]
       : []),
   ]
 
