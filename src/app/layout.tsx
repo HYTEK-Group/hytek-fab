@@ -1,12 +1,17 @@
 import type { Metadata, Viewport } from 'next'
-import { Jost } from 'next/font/google'
+import localFont from 'next/font/local'
 import './globals.css'
 import { Providers } from './providers'
 
-const jost = Jost({
+// Jost is SELF-HOSTED (one variable woff2 covering wght 100–900, latin subset
+// — replaces the five static cuts Google served; rendering unchanged).
+// next/font/google downloads from Google at build/dev time and Turbopack's
+// fetcher panics on some networks ("http2 feature is not enabled") → every
+// page 500s in local dev. Same fix as hytek-hub PR #121.
+const jost = localFont({
+  src: './fonts/jost-latin-variable.woff2',
+  weight: '100 900',
   variable: '--font-jost',
-  subsets: ['latin'],
-  weight: ['300', '400', '500', '600', '700'],
 })
 
 export const metadata: Metadata = {
