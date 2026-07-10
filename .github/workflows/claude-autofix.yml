@@ -1,0 +1,66 @@
+# Self-healing pilot: when an issue is labelled "ai-fix", Claude investigates it
+# in this repo and, if it can safely fix it, opens a pull request with the fix.
+# Nothing reaches production automatically — YOU review and merge the PR.
+#
+# Issues come from two places, both already wired:
+#   - staff bug reports via the Hub Assistant (labelled "ai-fix" automatically), and
+#   - (once Sentry is on) auto-detected runtime errors.
+#
+# REQUIRES (one-time, see docs/SELF-HEALING-TURN-IT-ON.md):
+#   1. Install the Claude GitHub App on this repo.
+#   2. Add repo secret ANTHROPIC_API_KEY.
+#   3. Create the "ai-fix" label.
+
+name: Claude auto-fix (pilot)
+
+on:
+  issues:
+    types: [labeled]
+
+# Only react to the ai-fix label; ignore every other label event.
+jobs:
+  fix:
+    if: github.event.label.name == 'ai-fix'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write        # push a fix branch
+      pull-requests: write   # open the PR
+      issues: write          # comment back on the issue
+      id-token: write        # claude-code-action fetches an OIDC token (required even with api-key auth)
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Claude attempts a fix
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          label_trigger: "ai-fix"
+          show_full_output: "true"
+          # Title/body are passed via env (not inlined into the prompt) so a
+          # crafted issue body can't rewrite the instructions.
+          prompt: |
+            A problem was reported in this repository. The details are in the
+            environment variables ISSUE_TITLE and ISSUE_BODY.
+
+            Your job:
+            1. Reproduce / locate the root cause in this repo.
+            2. If you can fix it SAFELY and in a SMALL, scoped change, do so and
+               open a pull request with the fix and a one-paragraph explanation.
+               Add or update a test where it makes sense.
+            3. If it is risky, ambiguous, or needs a human decision, DO NOT force
+               a change — instead comment on the issue with what you found and
+               what a human needs to decide.
+
+            Hard rules:
+            - Keep the change minimal and limited to this issue.
+            - NEVER touch unrelated apps, shared database tables/migrations, auth,
+              or secrets. If a real fix would need any of those, stop and comment.
+            - A human reviews and merges every PR — do not assume auto-merge.
+          claude_args: |
+            --model claude-sonnet-5
+            --allowedTools Read,Glob,Grep,Edit,MultiEdit,Write,Bash
+        env:
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
