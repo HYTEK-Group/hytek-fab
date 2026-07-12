@@ -8,7 +8,7 @@ import * as XLSX from 'xlsx'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { getSupervisorCaller } from '@/lib/fab-auth'
 import { parseAssemblyRows, type Row } from '@/lib/tekla-assembly'
-import { diffMarks, needsReview, type ExistingMark } from '@/lib/fab-import'
+import { diffMarks, needsReview, buildMarkUpserts, MARK_UPSERT_OPTIONS, type ExistingMark } from '@/lib/fab-import'
 import { computeAndUpsertProgress } from '@/lib/fab-progress'
 import { stableSource } from '@/lib/source-key'
 
@@ -75,26 +75,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const version = ((batches?.[0]?.issue_version as number) ?? 0) + 1
 
   // Apply: create added; update changed that are NOT protected. Stamp provenance.
-  const upserts: Record<string, unknown>[] = []
-  for (const d of diff.added) {
-    const p = d.parsed!
-    upserts.push({
-      fab_job_id: id, mark_id: p.mark_id.toUpperCase(), description: p.description, section: p.section,
-      length_mm: p.length_mm, weight_kg: p.weight_kg, quantity: p.quantity, coating: p.coating,
-      status: 'not_started', source: 'import', source_issue: version, source_file: sourceKey, source_hash: sourceHash,
-    })
-  }
-  for (const d of diff.changed) {
-    if (d.isProtected) continue
-    const p = d.parsed!
-    upserts.push({
-      fab_job_id: id, mark_id: p.mark_id.toUpperCase(), description: p.description, section: p.section,
-      length_mm: p.length_mm, weight_kg: p.weight_kg, quantity: p.quantity, coating: p.coating,
-      source: 'import', source_issue: version, source_file: sourceKey, source_hash: sourceHash,
-    })
-  }
+  // The batch mixes rows with and without `status`, so MARK_UPSERT_OPTIONS
+  // (defaultToNull: false) is load-bearing — see fab-import.ts.
+  const upserts = buildMarkUpserts(diff, { fabJobId: id, version, sourceKey, sourceHash })
   if (upserts.length) {
-    const { error } = await admin.from('fab_marks').upsert(upserts, { onConflict: 'fab_job_id,mark_id' })
+    const { error } = await admin.from('fab_marks').upsert(upserts, MARK_UPSERT_OPTIONS)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   }
 

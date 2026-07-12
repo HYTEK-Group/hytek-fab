@@ -94,3 +94,41 @@ export function diffMarks(parsed: ParsedMark[], existing: ExistingMark[], source
 export function needsReview(diff: ImportDiff): boolean {
   return diff.changed.some(d => d.isProtected) || diff.removed.length > 0
 }
+
+/** Upsert options for the fab_marks import write. defaultToNull MUST stay false:
+ *  the batch mixes added rows (which set status) with changed rows (which omit
+ *  it — a respec'd mark keeps its DB status). With supabase-js's default
+ *  (defaultToNull: true) the changed rows go up as status: null and the
+ *  ON CONFLICT UPDATE path violates fab_marks.status NOT NULL — the WHOLE import
+ *  500s whenever one re-issue both adds a mark and respecs a clean one. With
+ *  false, an omitted column takes its column DEFAULT ('not_started'), a no-op
+ *  here because every non-protected changed mark is 'not_started' by definition
+ *  (markHasWork counts any other status as work → protected → skipped). */
+export const MARK_UPSERT_OPTIONS = { onConflict: 'fab_job_id,mark_id', defaultToNull: false } as const
+
+/** Build the fab_marks upsert rows for a diff: adds (status stamped) + clean
+ *  respecs (status omitted — preserved via MARK_UPSERT_OPTIONS). Pure, testable. */
+export function buildMarkUpserts(
+  diff: ImportDiff,
+  meta: { fabJobId: string; version: number; sourceKey: string; sourceHash: string },
+): Record<string, unknown>[] {
+  const rows: Record<string, unknown>[] = []
+  for (const d of diff.added) {
+    const p = d.parsed!
+    rows.push({
+      fab_job_id: meta.fabJobId, mark_id: p.mark_id.toUpperCase(), description: p.description, section: p.section,
+      length_mm: p.length_mm, weight_kg: p.weight_kg, quantity: p.quantity, coating: p.coating,
+      status: 'not_started', source: 'import', source_issue: meta.version, source_file: meta.sourceKey, source_hash: meta.sourceHash,
+    })
+  }
+  for (const d of diff.changed) {
+    if (d.isProtected) continue
+    const p = d.parsed!
+    rows.push({
+      fab_job_id: meta.fabJobId, mark_id: p.mark_id.toUpperCase(), description: p.description, section: p.section,
+      length_mm: p.length_mm, weight_kg: p.weight_kg, quantity: p.quantity, coating: p.coating,
+      source: 'import', source_issue: meta.version, source_file: meta.sourceKey, source_hash: meta.sourceHash,
+    })
+  }
+  return rows
+}

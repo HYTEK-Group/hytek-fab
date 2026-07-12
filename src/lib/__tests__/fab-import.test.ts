@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { diffMarks, needsReview, markHasWork, type ExistingMark } from '../fab-import'
+import { diffMarks, needsReview, markHasWork, buildMarkUpserts, MARK_UPSERT_OPTIONS, type ExistingMark } from '../fab-import'
 import type { ParsedMark } from '../tekla-assembly'
 
 const pm = (p: Partial<ParsedMark>): ParsedMark => ({
@@ -69,5 +69,39 @@ describe('diffMarks', () => {
     expect(markHasWork(em({ status: 'not_started', dispatch_load_id: 'L' }))).toBe(true)
     expect(markHasWork(em({ status: 'not_started', rework_count: 1 }))).toBe(true)
     expect(markHasWork(em({ status: 'not_started' }))).toBe(false)
+  })
+})
+
+describe('buildMarkUpserts + MARK_UPSERT_OPTIONS (mixed re-issue regression)', () => {
+  // The 12/07/2026 bug: one re-issue that both ADDS a mark and RESPECS a clean
+  // mark produced a mixed batch (added rows set status, changed rows omit it);
+  // with supabase-js's default defaultToNull:true the changed rows went up as
+  // status:null → fab_marks.status NOT NULL violation → the WHOLE import 500'd.
+  const meta = { fabJobId: 'job-1', version: 2, sourceKey: 'BLOCK1', sourceHash: 'h' }
+  const mixedDiff = () => diffMarks(
+    [pm({ mark_id: 'NEW1' }), pm({ mark_id: 'A1', weight_kg: 99 })],
+    [em({ mark_id: 'A1', weight_kg: 50, status: 'not_started' })],
+  )
+
+  it('added rows stamp status, changed rows OMIT it (never null)', () => {
+    const rows = buildMarkUpserts(mixedDiff(), meta)
+    const add = rows.find(r => r.mark_id === 'NEW1')!
+    const chg = rows.find(r => r.mark_id === 'A1')!
+    expect(add.status).toBe('not_started')
+    expect('status' in chg).toBe(false)      // omitted — kept by defaultToNull:false
+    expect(chg.status).not.toBeNull()
+  })
+
+  it('defaultToNull stays false so the mixed batch cannot null status on update', () => {
+    expect(MARK_UPSERT_OPTIONS.defaultToNull).toBe(false)
+    expect(MARK_UPSERT_OPTIONS.onConflict).toBe('fab_job_id,mark_id')
+  })
+
+  it('protected changes are excluded from the write entirely', () => {
+    const d = diffMarks(
+      [pm({ mark_id: 'W1', weight_kg: 99 })],
+      [em({ mark_id: 'W1', weight_kg: 50, status: 'done' })],
+    )
+    expect(buildMarkUpserts(d, meta)).toHaveLength(0)
   })
 })
