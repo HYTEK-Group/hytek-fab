@@ -1,0 +1,22 @@
+# PR test gate — the job name "tests" is what branch protection requires.
+# vitest runs non-watch ("npm test" = "vitest run"); tsc --noEmit was clean
+# locally so it gates too. Tests set their own env vars — no secrets needed.
+name: PR tests
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npx tsc --noEmit
