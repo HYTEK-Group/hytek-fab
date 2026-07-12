@@ -1,20 +1,49 @@
-# Enables auto-merge on every non-draft PR; the merge only fires when ALL
-# required checks (tests) are green — red physically blocks.
+# Auto-merge: green merges itself, red blocks.
+#
+# WHY workflow_run instead of `gh pr merge --auto` at PR-open:
+# This repo is PRIVATE on the GitHub FREE plan, where native auto-merge and
+# branch protection / rulesets are unavailable (API returns 403). On an
+# unprotected repo, `gh pr merge --auto` merges IMMEDIATELY (gh treats
+# CLEAN/UNSTABLE as "mergeable now"), i.e. before tests finish. So instead we
+# merge only AFTER the "PR tests" workflow completes successfully on the PR's
+# current head commit. A red or still-running suite is never auto-merged; a
+# stale success (PR got new commits meanwhile) no longer matches head and is
+# skipped. If the org ever upgrades plans, add branch protection requiring the
+# "tests" check and this file can revert to native auto-merge.
 name: Auto-merge
 
 on:
-  pull_request:
-    types: [opened, reopened, ready_for_review]
+  workflow_run:
+    workflows: ["PR tests"]
+    types: [completed]
 
 permissions:
   contents: write
   pull-requests: write
 
 jobs:
-  enable-auto-merge:
-    if: github.event.pull_request.draft == false
+  merge-on-green:
+    # Only merge when the tests run for a pull_request event ended green.
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'pull_request'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
-      - run: gh pr merge --auto --squash "${{ github.event.pull_request.html_url }}"
+      - name: Merge the PR that just went green (squash)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          # Find the open, non-draft PR whose CURRENT head is the commit that
+          # passed. If the PR was pushed to since, there is no match and we
+          # skip — the newer commit gets its own tests run + merge attempt.
+          PR_NUMBER=$(gh pr list --repo "$REPO" --state open \
+            --json number,isDraft,headRefOid \
+            --jq ".[] | select(.headRefOid == \"$HEAD_SHA\" and (.isDraft | not)) | .number" | head -1)
+          if [ -z "$PR_NUMBER" ]; then
+            echo "No open non-draft PR with head $HEAD_SHA — nothing to merge."
+            exit 0
+          fi
+          echo "Tests green on PR #$PR_NUMBER @ $HEAD_SHA — merging."
+          gh pr merge --squash --repo "$REPO" "$PR_NUMBER"
