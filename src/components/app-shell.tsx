@@ -40,7 +40,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* Header */}
       <header style={{ background: 'var(--background)' }} className="flex items-center justify-between px-4 py-3 flex-shrink-0">
         <div className="flex items-center gap-2">
-          <Image src="/hytek-group-logo.png" alt="HYTEK" width={80} height={22} priority />
+          <Link href="/action" aria-label="Home" className="flex items-center">
+            <Image src="/hytek-group-logo.png" alt="HYTEK" width={80} height={22} priority />
+          </Link>
           <span className="text-sm font-medium ml-1" style={{ color: 'var(--foreground)' }}>Fabrication</span>
         </div>
         <div className="flex items-center gap-3">

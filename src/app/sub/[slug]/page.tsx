@@ -225,7 +225,9 @@ export default function SubPage({ params }: { params: Promise<{ slug: string }> 
         position: 'sticky', top: 0, zIndex: 10,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <span style={{ fontWeight: 800, fontSize: 18, letterSpacing: 0.5 }}>HYTEK FAB</span>
+          <a href={`/sub/${slug}`} aria-label="Home" style={{ color: 'inherit', textDecoration: 'none' }}>
+            <span style={{ fontWeight: 800, fontSize: 18, letterSpacing: 0.5 }}>HYTEK FAB</span>
+          </a>
           {packages.map(p => p.job.quote_number && (
             <span key={p.package_id} style={quoteChip}>{p.job.quote_number}</span>
           ))}
