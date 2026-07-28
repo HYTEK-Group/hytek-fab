@@ -15,7 +15,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { randomUUID } from 'crypto'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { getSubCaller, grantedPackage } from '@/lib/fab-sub-auth'
-import { imageSha256, duplicatePhotoNote } from '@/lib/fab-photo-dedupe'
+import { imageSha256, duplicatePhotoCheck, isUniqueViolation } from '@/lib/fab-photo-dedupe'
 import type { ProofStage } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
@@ -53,12 +53,16 @@ export async function POST(req: NextRequest) {
     if (!data) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
-  // Fingerprint the image server-side and reject a re-used shot (anti-fraud) —
-  // same rule as the internal chain, so a sub can't reuse one photo either.
+  // Fingerprint + reject a re-used shot (fails closed). Scope the message to the
+  // sub's own granted packages so a collision elsewhere on the job can't leak
+  // another package's mark label to them.
   const buf = Buffer.from(await file.arrayBuffer())
   const sha = imageSha256(buf)
-  const dup = await duplicatePhotoNote(admin, pkg.fab_job_id, sha)
-  if (dup) return NextResponse.json({ error: dup }, { status: 409 })
+  const dup = await duplicatePhotoCheck(admin, pkg.fab_job_id, sha, {
+    scopePackageIds: caller.packages.map(p => p.package_id),
+  })
+  if (dup.status === 'error') return NextResponse.json({ error: 'Could not verify the photo, try again' }, { status: 503 })
+  if (dup.status === 'duplicate') return NextResponse.json({ error: dup.note }, { status: 409 })
 
   const ext = (file.name.match(/\.[a-z0-9]+$/i)?.[0] ?? '.jpg').toLowerCase()
   // Path is FORCED under the package's own job + a sub/ prefix — never client-chosen.
@@ -81,7 +85,12 @@ export async function POST(req: NextRequest) {
     taken_by: caller.stamp,
     image_sha256: sha,
   }).select('id, stage, taken_at').single()
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) {
+    if (isUniqueViolation(error)) {
+      return NextResponse.json({ error: 'This exact photo is already used on this job. Take a fresh photo of the actual piece.' }, { status: 409 })
+    }
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
 
   const { data: signed } = await admin.storage.from('fab-proof').createSignedUrl(path, 3600)
   return NextResponse.json({
