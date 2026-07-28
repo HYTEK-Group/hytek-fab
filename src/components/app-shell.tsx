@@ -36,65 +36,68 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   ]
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ background: 'var(--background)' }}>
-      {/* Header */}
-      <header style={{ background: 'var(--background)' }} className="flex items-center justify-between px-4 py-3 flex-shrink-0">
-        <div className="flex items-center gap-2">
-          <Link href="/action" aria-label="Home" className="flex items-center">
-            <Image src="/hytek-group-logo.png" alt="HYTEK" width={80} height={22} priority />
-          </Link>
-          <span className="text-sm font-medium ml-1" style={{ color: 'var(--foreground)' }}>Fabrication</span>
-        </div>
-        <div className="flex items-center gap-3">
-          {profile && (
-            <span className="text-xs" style={{ color: 'var(--foreground)', fontWeight: 700 }}>
-              {profile.full_name ?? profile.email}
-            </span>
-          )}
-          <button
-            onClick={handleSignOut}
-            className="text-xs px-2 py-1 rounded"
-            style={{ color: 'var(--text-3)', background: 'transparent', border: '0.5px solid var(--border)', minHeight: '28px' }}
-          >
-            Sign out
-          </button>
-        </div>
-      </header>
+    <div className="min-h-screen" style={{ background: 'var(--background)' }}>
+      {/* Frozen top ribbon: brand line + tab nav. Stays pinned as you scroll. */}
+      <div className="sticky top-0 z-30" style={{ background: 'var(--background)' }}>
+        {/* Brand line */}
+        <header style={{ background: 'var(--background)' }} className="flex items-center justify-between px-4 py-3">
+          <div className="flex items-center gap-2">
+            <Link href="/action" aria-label="Home" className="flex items-center">
+              <Image src="/hytek-group-logo.png" alt="HYTEK" width={80} height={22} priority />
+            </Link>
+            <span className="text-sm font-medium ml-1" style={{ color: 'var(--foreground)' }}>Fabrication</span>
+          </div>
+          <div className="flex items-center gap-3">
+            {profile && (
+              <span className="text-xs" style={{ color: 'var(--foreground)', fontWeight: 700 }}>
+                {profile.full_name ?? profile.email}
+              </span>
+            )}
+            <button
+              onClick={handleSignOut}
+              className="text-xs px-2 py-1 rounded"
+              style={{ color: 'var(--text-3)', background: 'transparent', border: '0.5px solid var(--border)', minHeight: '28px' }}
+            >
+              Sign out
+            </button>
+          </div>
+        </header>
 
-      {/* Content */}
-      <main className="flex-1 overflow-auto">
+        {/* Tab nav — a top ribbon now; underline marks the active tab */}
+        <nav
+          className="flex border-b"
+          style={{ background: 'var(--surface-2)', borderColor: 'var(--border)' }}
+        >
+          {navItems.map(({ href, label, icon }) => {
+            // Shop owns the job board + individual job pages (/jobs/[id]).
+            const active =
+              pathname === href ||
+              (href !== '/shop' && pathname.startsWith(href)) ||
+              (href === '/shop' && pathname.startsWith('/jobs'))
+            return (
+              <Link
+                key={href}
+                href={href}
+                className="flex-1 flex flex-col items-center justify-center py-2 text-xs gap-0.5"
+                style={{
+                  color: active ? 'var(--foreground)' : 'var(--text-2)',
+                  fontWeight: active ? 700 : undefined,
+                  borderBottom: active ? '2px solid var(--hytek-yellow)' : '2px solid transparent',
+                  minHeight: '52px',
+                }}
+              >
+                <span className="text-base">{icon}</span>
+                <span>{label}</span>
+              </Link>
+            )
+          })}
+        </nav>
+      </div>
+
+      {/* Content scrolls under the frozen ribbon */}
+      <main>
         {children}
       </main>
-
-      {/* Bottom nav */}
-      <nav
-        className="flex border-t flex-shrink-0"
-        style={{ background: 'var(--surface-2)', borderColor: 'var(--border)' }}
-      >
-        {navItems.map(({ href, label, icon }) => {
-          // Shop owns the job board + individual job pages (/jobs/[id]).
-          const active =
-            pathname === href ||
-            (href !== '/shop' && pathname.startsWith(href)) ||
-            (href === '/shop' && pathname.startsWith('/jobs'))
-          return (
-            <Link
-              key={href}
-              href={href}
-              className="flex-1 flex flex-col items-center justify-center py-2 text-xs gap-0.5"
-              style={{
-                color: active ? 'var(--foreground)' : 'var(--text-2)',
-                fontWeight: active ? 700 : undefined,
-                borderTop: active ? '2px solid var(--hytek-yellow)' : '2px solid transparent',
-                minHeight: '52px',
-              }}
-            >
-              <span className="text-base">{icon}</span>
-              <span>{label}</span>
-            </Link>
-          )
-        })}
-      </nav>
     </div>
   )
 }
