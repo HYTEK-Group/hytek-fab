@@ -116,6 +116,8 @@ export interface FabProofPhoto {
   caption: string | null
   taken_by: string
   taken_at: string
+  /** Server-computed SHA-256 of the image bytes — the same shot can't be reused (sql/010). */
+  image_sha256: string | null
   created_at: string
 }
 

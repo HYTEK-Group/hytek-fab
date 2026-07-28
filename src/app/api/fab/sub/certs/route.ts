@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { randomUUID } from 'crypto'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { getSubCaller, grantedPackage } from '@/lib/fab-sub-auth'
+import { checkCert } from '@/lib/fab-cert-validity'
 import type { CertKind } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
@@ -33,9 +34,13 @@ export async function POST(req: NextRequest) {
   const note = ((form?.get('note') as string) || '').slice(0, 500) || null
 
   const admin = getSupabaseAdmin()
+  const buf = Buffer.from(await file.arrayBuffer())
+  // Reject the obviously-wrong (blank / not a real doc) so a cert means something.
+  const v = checkCert(buf)
+  if (!v.ok) return NextResponse.json({ error: v.reason }, { status: 400 })
+
   const ext = (file.name.match(/\.[a-z0-9]+$/i)?.[0] ?? '.pdf').toLowerCase()
   const path = `${pkg.fab_job_id}/certs/${packageId}/${randomUUID()}${ext}`
-  const buf = Buffer.from(await file.arrayBuffer())
   const { error: upErr } = await admin.storage.from('fab-proof').upload(path, buf, {
     contentType: file.type || 'application/pdf', upsert: false,
   })
