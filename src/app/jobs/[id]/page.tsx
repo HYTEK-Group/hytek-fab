@@ -846,7 +846,10 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
       headers: { Authorization: `Bearer ${token}` },
     })
     setDispatching(false)
-    if (res.ok) load()
+    if (res.ok) { load(); return }
+    // Completeness gate (409): tell the supervisor exactly which pieces have no photo.
+    const j = await res.json().catch(() => ({} as { error?: string; blockers?: string[] }))
+    alert([j.error ?? 'Could not alert dispatch', ...(j.blockers ?? [])].join('\n\n'))
   }
 
   if (loading || !user) return null
@@ -858,7 +861,6 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
 
   const TABS: { id: Tab; label: string }[] = [
     { id: 'assemblies', label: 'Assemblies' },
-    { id: 'tasks', label: 'Matrix' },
     { id: 'marks', label: 'Marks' },
     { id: 'drawings', label: 'Drawings' },
     { id: 'packages', label: 'Packages' },

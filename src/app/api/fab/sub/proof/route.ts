@@ -15,6 +15,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { randomUUID } from 'crypto'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { getSubCaller, grantedPackage } from '@/lib/fab-sub-auth'
+import { imageSha256, duplicatePhotoNote } from '@/lib/fab-photo-dedupe'
 import type { ProofStage } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
@@ -52,10 +53,16 @@ export async function POST(req: NextRequest) {
     if (!data) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
+  // Fingerprint the image server-side and reject a re-used shot (anti-fraud) —
+  // same rule as the internal chain, so a sub can't reuse one photo either.
+  const buf = Buffer.from(await file.arrayBuffer())
+  const sha = imageSha256(buf)
+  const dup = await duplicatePhotoNote(admin, pkg.fab_job_id, sha)
+  if (dup) return NextResponse.json({ error: dup }, { status: 409 })
+
   const ext = (file.name.match(/\.[a-z0-9]+$/i)?.[0] ?? '.jpg').toLowerCase()
   // Path is FORCED under the package's own job + a sub/ prefix — never client-chosen.
   const path = `${pkg.fab_job_id}/sub/${packageId}/${stage}/${randomUUID()}${ext}`
-  const buf = Buffer.from(await file.arrayBuffer())
   const { error: upErr } = await admin.storage.from('fab-proof').upload(path, buf, {
     contentType: file.type || 'image/jpeg', upsert: false,
   })
@@ -72,6 +79,7 @@ export async function POST(req: NextRequest) {
     file_name: file.name,
     caption,
     taken_by: caller.stamp,
+    image_sha256: sha,
   }).select('id, stage, taken_at').single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 

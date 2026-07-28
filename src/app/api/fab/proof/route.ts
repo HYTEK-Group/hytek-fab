@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { randomUUID } from 'crypto'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { getUserCaller } from '@/lib/fab-auth'
+import { imageSha256, duplicatePhotoNote } from '@/lib/fab-photo-dedupe'
 import type { ProofStage } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
@@ -43,9 +44,14 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Fingerprint the image server-side and reject a re-used shot (anti-fraud).
+  const buf = Buffer.from(await file.arrayBuffer())
+  const sha = imageSha256(buf)
+  const dup = await duplicatePhotoNote(admin, jobId, sha)
+  if (dup) return NextResponse.json({ error: dup }, { status: 409 })
+
   const ext = (file.name.match(/\.[a-z0-9]+$/i)?.[0] ?? '.jpg').toLowerCase()
   const path = `${jobId}/${stage}/${randomUUID()}${ext}`
-  const buf = Buffer.from(await file.arrayBuffer())
   const { error: upErr } = await admin.storage.from('fab-proof').upload(path, buf, {
     contentType: file.type || 'image/jpeg', upsert: false,
   })
@@ -54,7 +60,7 @@ export async function POST(req: NextRequest) {
   const { data: row, error } = await admin.from('fab_proof_photos').insert({
     fab_job_id: jobId, fab_mark_id: markId, fab_package_id: packageId, fab_load_id: loadId,
     stage, treatment_type: treatmentType, storage_path: path, file_name: file.name,
-    caption, taken_by: caller.name,
+    caption, taken_by: caller.name, image_sha256: sha,
   }).select('id, stage, taken_at').single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
