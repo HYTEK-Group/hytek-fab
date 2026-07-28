@@ -839,17 +839,34 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
     }
   }, [user, load])
 
+  async function postDispatch(payload: object) {
+    return fetch(`/api/fab/jobs/${id}/dispatch`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+  }
+
   async function dispatch() {
     setDispatching(true)
-    const res = await fetch(`/api/fab/jobs/${id}/dispatch`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    const res = await postDispatch({})
     setDispatching(false)
     if (res.ok) { load(); return }
     // Completeness gate (409): tell the supervisor exactly which pieces have no photo.
     const j = await res.json().catch(() => ({} as { error?: string; blockers?: string[] }))
-    alert([j.error ?? 'Could not alert dispatch', ...(j.blockers ?? [])].join('\n\n'))
+    const msg = [j.error ?? 'Could not alert dispatch', ...(j.blockers ?? [])].join('\n\n')
+    if (res.status === 409 && (role === 'admin' || role === 'supervisor')) {
+      const reason = window.prompt(`${msg}\n\nTo release anyway, type a reason (this gets logged):`)
+      if (reason && reason.trim()) {
+        setDispatching(true)
+        const r2 = await postDispatch({ override: true, reason: reason.trim() })
+        setDispatching(false)
+        if (r2.ok) load()
+        else alert('Override failed — try again.')
+      }
+      return
+    }
+    alert(msg)
   }
 
   if (loading || !user) return null

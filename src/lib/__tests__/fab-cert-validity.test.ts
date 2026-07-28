@@ -13,6 +13,10 @@ describe('checkCert', () => {
   it('accepts a real-sized PNG', () => {
     expect(checkCert(pad(Buffer.from([0x89, 0x50, 0x4e, 0x47]))).ok).toBe(true)
   })
+  it('accepts an iPhone HEIC (ftyp + heic brand)', () => {
+    const heic = Buffer.concat([Buffer.from([0, 0, 0, 0x18]), Buffer.from('ftypheic')])
+    expect(checkCert(pad(heic)).ok).toBe(true)
+  })
   it('rejects a blank / tiny file', () => {
     const v = checkCert(Buffer.from('%PDF-1.7'))
     expect(v.ok).toBe(false)

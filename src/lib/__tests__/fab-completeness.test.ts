@@ -21,10 +21,10 @@ describe('computeCompleteness', () => {
     expect(r.blockers[0]).toMatch(/B, C/)
   })
 
-  it('an empty job is not ready', () => {
+  it('a job with no pieces is not blocked (nothing to photograph)', () => {
     const r = computeCompleteness([], [])
-    expect(r.ready).toBe(false)
-    expect(r.blockers[0]).toMatch(/no pieces/i)
+    expect(r.ready).toBe(true)
+    expect(r.blockers).toEqual([])
   })
 
   it('a photo with no mark id does not satisfy any piece', () => {

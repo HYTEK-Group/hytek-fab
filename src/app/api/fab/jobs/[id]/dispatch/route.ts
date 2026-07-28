@@ -16,21 +16,37 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const now = new Date().toISOString()
   const admin = getSupabaseAdmin()
+  const body = (await req.json().catch(() => ({}))) as { override?: boolean; reason?: string }
 
   // ── Completeness gate: can't alert dispatch until every piece has a made photo.
-  // Names the missing pieces so the floor finds them before the truck. Marks that
-  // are out with / made by a subcontractor carry their own 'made' photo, so they
-  // count. (A logged supervisor override is a separate, audited action — W4.)
-  const [{ data: gateMarks }, { data: gatePhotos }] = await Promise.all([
+  // Names the missing pieces so the floor finds them before the truck. Marks
+  // made by a subcontractor carry their own 'made' photo, so they count.
+  const [marksRes, photosRes] = await Promise.all([
     admin.from('fab_marks').select('id, mark_id').eq('fab_job_id', id),
     admin.from('fab_proof_photos').select('fab_mark_id, stage').eq('fab_job_id', id),
   ])
-  const completeness = computeCompleteness(gateMarks ?? [], gatePhotos ?? [])
+  // Fail on a real DB fault (500) — never mistake it for a completeness gap (409).
+  if (marksRes.error) return NextResponse.json({ error: marksRes.error.message }, { status: 500 })
+  if (photosRes.error) return NextResponse.json({ error: photosRes.error.message }, { status: 500 })
+
+  const completeness = computeCompleteness(marksRes.data ?? [], photosRes.data ?? [])
   if (!completeness.ready) {
-    return NextResponse.json(
-      { error: 'Not every piece is photographed yet', ...completeness },
-      { status: 409 },
-    )
+    // A supervisor can consciously override with a reason (e.g. an in-flight job
+    // that predates the photo rule). The override is LOGGED as an append-only
+    // audit event — it's an exception on the record, not a silent bypass.
+    const reason = (body.reason ?? '').trim()
+    if (body.override === true && reason) {
+      await admin.from('fab_events').insert({
+        fab_job_id: id, kind: 'dispatch_override',
+        actor: user.fullName ?? user.email ?? user.id,
+        detail: { missing_marks: completeness.missing_marks, total: completeness.total, reason },
+      })
+    } else {
+      return NextResponse.json(
+        { error: 'Not every piece is photographed yet', ...completeness },
+        { status: 409 },
+      )
+    }
   }
 
   const { data, error } = await admin
