@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { randomUUID } from 'crypto'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { getUserCaller } from '@/lib/fab-auth'
-import { imageSha256, duplicatePhotoNote } from '@/lib/fab-photo-dedupe'
+import { imageSha256, duplicatePhotoCheck, isUniqueViolation } from '@/lib/fab-photo-dedupe'
 import type { ProofStage } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
@@ -44,11 +44,13 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Fingerprint the image server-side and reject a re-used shot (anti-fraud).
+  // Fingerprint the image server-side and reject a re-used shot. Fails CLOSED:
+  // a lookup error blocks the upload rather than silently letting a dup through.
   const buf = Buffer.from(await file.arrayBuffer())
   const sha = imageSha256(buf)
-  const dup = await duplicatePhotoNote(admin, jobId, sha)
-  if (dup) return NextResponse.json({ error: dup }, { status: 409 })
+  const dup = await duplicatePhotoCheck(admin, jobId, sha)
+  if (dup.status === 'error') return NextResponse.json({ error: 'Could not verify the photo, try again' }, { status: 503 })
+  if (dup.status === 'duplicate') return NextResponse.json({ error: dup.note }, { status: 409 })
 
   const ext = (file.name.match(/\.[a-z0-9]+$/i)?.[0] ?? '.jpg').toLowerCase()
   const path = `${jobId}/${stage}/${randomUUID()}${ext}`
@@ -62,7 +64,13 @@ export async function POST(req: NextRequest) {
     stage, treatment_type: treatmentType, storage_path: path, file_name: file.name,
     caption, taken_by: caller.name, image_sha256: sha,
   }).select('id, stage, taken_at').single()
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) {
+    // DB-level unique index (sql/011) is the race-proof backstop for the dedupe.
+    if (isUniqueViolation(error)) {
+      return NextResponse.json({ error: 'This exact photo is already used on this job. Take a fresh photo of the actual piece.' }, { status: 409 })
+    }
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
 
   const { data: signed } = await admin.storage.from('fab-proof').createSignedUrl(path, 3600)
   return NextResponse.json({ ok: true, id: row.id, stage: row.stage, taken_at: row.taken_at, url: signed?.signedUrl ?? null })

@@ -25,10 +25,10 @@ export function computeCompleteness(marks: CompMark[], photos: CompPhoto[]): Com
   const has_bundled = photos.some(p => p.stage === 'bundled')
   const has_loaded = photos.some(p => p.stage === 'loaded')
 
+  // A job that tracks no marks has nothing to photograph → not blocked (matches
+  // pre-gate behaviour). The gate only bites once a job has pieces to prove.
   const blockers: string[] = []
-  if (marks.length === 0) {
-    blockers.push('No pieces on this job')
-  } else if (missing.length > 0) {
+  if (missing.length > 0) {
     const names = missing.slice(0, 12).map(m => m.mark_id).join(', ')
     blockers.push(
       `${missing.length} of ${marks.length} pieces have no photo — find and photograph: ${names}${missing.length > 12 ? ` +${missing.length - 12} more` : ''}`,

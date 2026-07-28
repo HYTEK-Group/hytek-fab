@@ -5,8 +5,10 @@
 -- API ok) under the gqtikz coordination_lock. Idempotent, additive.
 --
 -- A server-computed SHA-256 of each proof image. The upload routes reject an
--- image already used on another piece/stage of the same job — closing the
--- "photograph one piece, reuse the shot for five marks" fake.
+-- EXACT image already used on the same job — closing the lazy "photograph one
+-- piece, reuse the shot for five marks" re-use. HONEST SCOPE: exact-byte only —
+-- it does not resist a 1-byte alteration and is a presence/tamper check, not
+-- proof the photo is of the right piece. sql/011 makes it DB-enforced (unique).
 
 ALTER TABLE public.fab_proof_photos
   ADD COLUMN IF NOT EXISTS image_sha256 text;
