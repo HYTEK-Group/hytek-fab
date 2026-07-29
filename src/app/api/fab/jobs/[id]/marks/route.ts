@@ -7,6 +7,8 @@ import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { requireFabSupervisor } from '@/lib/get-fab-user'
 import { getUserCaller } from '@/lib/fab-auth'
 import { computeAndUpsertProgress } from '@/lib/fab-progress'
+import { logException } from '@/lib/fab-events-log'
+import { isBackwardStatus } from '@/lib/fab-gatekeeper'
 import type { MarkStatus } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
@@ -85,6 +87,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 
   const admin = getSupabaseAdmin()
+
+  // Snapshot the marks' current status BEFORE the write so we can spot a
+  // reversion (proven work pushed back down the chain) — a gatekeeper exception.
+  const { data: before } = await admin
+    .from('fab_marks').select('id, mark_id, status').eq('fab_job_id', id).in('id', body.mark_ids)
+  const priorById = new Map((before ?? []).map(m => [m.id, m]))
+
   const patch: Record<string, unknown> = { status: body.status, updated_at: new Date().toISOString() }
   if (body.note !== undefined) patch.note = body.note
 
@@ -99,6 +108,20 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const { data, error } = await query.select()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // Only rows that actually changed (`data`) count — a floor worker's write can
+  // silently skip contractor-locked marks, so reconcile against what landed.
+  const reverted = (data ?? [])
+    .map(m => priorById.get(m.id))
+    .filter((p): p is { id: string; mark_id: string; status: string } => !!p && isBackwardStatus(p.status, body.status))
+    .map(p => ({ mark_id: p.mark_id, from: p.status }))
+  if (reverted.length > 0) {
+    await logException(admin, caller, {
+      fab_job_id: id, kind: 'mark_status_reverted',
+      detail: { to: body.status, reverted, by_role: caller.role },
+    })
+  }
+
   await computeAndUpsertProgress(id)
   return NextResponse.json({ marks: data })
 }

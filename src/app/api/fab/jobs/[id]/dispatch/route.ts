@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { requireFabSupervisor } from '@/lib/get-fab-user'
 import { computeCompleteness } from '@/lib/fab-completeness'
+import { logException } from '@/lib/fab-events-log'
 
 export const dynamic = 'force-dynamic'
 
@@ -36,11 +37,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     // audit event — it's an exception on the record, not a silent bypass.
     const reason = (body.reason ?? '').trim()
     if (body.override === true && reason) {
-      await admin.from('fab_events').insert({
-        fab_job_id: id, kind: 'dispatch_override',
-        actor: user.fullName ?? user.email ?? user.id,
-        detail: { missing_marks: completeness.missing_marks, total: completeness.total, reason },
-      })
+      // Stamp the raiser's namespaced identity (Supabase login) so the four-eyes
+      // clear can tell people apart — see fab-gatekeeper.sameHuman.
+      const { error: logErr } = await logException(
+        admin,
+        { name: user.fullName ?? user.email ?? user.id, key: `sb:${user.id}`, ns: 'supabase' },
+        {
+          fab_job_id: id, kind: 'dispatch_override',
+          detail: { missing_marks: completeness.missing_marks, total: completeness.total, reason },
+        },
+      )
+      // Fail CLOSED: the logged override IS the justification to ship un-photographed
+      // steel. If we can't record it, we don't allow it.
+      if (logErr) return NextResponse.json({ error: 'Could not record the override — not dispatched.' }, { status: 500 })
     } else {
       return NextResponse.json(
         { error: 'Not every piece is photographed yet', ...completeness },

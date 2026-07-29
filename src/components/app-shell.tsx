@@ -29,6 +29,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     ...NAV,
     ...(profile?.role === 'admin' || profile?.role === 'supervisor'
       ? [
+          { href: '/exceptions', label: 'Gate', icon: '⚖' },
           { href: '/subs', label: 'Subs', icon: '⇄' },
           { href: '/admin/workers', label: 'Workers', icon: '☷' },
         ]
