@@ -42,9 +42,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {/* Brand line */}
         <header style={{ background: 'var(--background)' }} className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2">
-            <Link href="/action" aria-label="Home" className="flex items-center">
+            {/* Brand mark returns to the HYTEK Hub portal (the launcher), not
+                fab's own home — matches the rest of the suite. Cross-origin,
+                so a plain <a>. */}
+            <a href="https://hub.hytekframing.com.au/portal" aria-label="Back to HYTEK Hub" className="flex items-center">
               <Image src="/hytek-group-logo.png" alt="HYTEK" width={80} height={22} priority />
-            </Link>
+            </a>
             <span className="text-sm font-medium ml-1" style={{ color: 'var(--foreground)' }}>Fabrication</span>
           </div>
           <div className="flex items-center gap-3">
