@@ -7,11 +7,12 @@ import { AppShell } from '@/components/app-shell'
 import { AssembliesTab } from '@/components/assemblies-tab'
 import { ProofTab } from '@/components/proof-tab'
 import { SubPackagePanel } from '@/components/sub-package-panel'
+import { StagesTab } from '@/components/stages-tab'
 import { supabase } from '@/lib/supabase'
 import { kgToTonnes } from '@/lib/fab-tonnage'
 import type { FabJob, FabTask, FabMark, FabTimeEntry } from '@/lib/types'
 
-type Tab = 'assemblies' | 'tasks' | 'marks' | 'drawings' | 'packages' | 'qc' | 'dispatch' | 'proof' | 'timelog'
+type Tab = 'assemblies' | 'tasks' | 'marks' | 'drawings' | 'stages' | 'packages' | 'qc' | 'dispatch' | 'proof' | 'timelog'
 
 interface JobDetail extends FabJob {
   task_count: number
@@ -810,7 +811,7 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
   const { user, loading } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
-  const validTabs: Tab[] = ['assemblies', 'tasks', 'marks', 'drawings', 'packages', 'qc', 'dispatch', 'proof', 'timelog']
+  const validTabs: Tab[] = ['assemblies', 'tasks', 'marks', 'drawings', 'stages', 'packages', 'qc', 'dispatch', 'proof', 'timelog']
   const tabParam = searchParams.get('tab') as Tab | null
   const [job, setJob] = useState<JobDetail | null>(null)
   const [tab, setTab] = useState<Tab>(tabParam && validTabs.includes(tabParam) ? tabParam : 'assemblies')
@@ -880,6 +881,7 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
     { id: 'assemblies', label: 'Assemblies' },
     { id: 'marks', label: 'Marks' },
     { id: 'drawings', label: 'Drawings' },
+    { id: 'stages', label: 'Stages' },
     { id: 'packages', label: 'Packages' },
     { id: 'qc', label: 'QC' },
     { id: 'dispatch', label: 'Dispatch' },
@@ -950,6 +952,7 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
           {tab === 'tasks' && <TasksTab jobId={id} token={token} role={role} />}
           {tab === 'marks' && <MarksTab jobId={id} token={token} />}
           {tab === 'drawings' && <DrawingsTab jobId={id} token={token} />}
+          {tab === 'stages' && <StagesTab jobId={id} token={token} role={role} />}
           {tab === 'packages' && <><PackagesTab jobId={id} token={token} /><SubPackagePanel jobId={id} token={token} role={role} /></>}
           {tab === 'qc' && <QCTab jobId={id} token={token} />}
           {tab === 'dispatch' && <DispatchTab jobId={id} token={token} />}

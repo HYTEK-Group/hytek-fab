@@ -13,7 +13,7 @@ import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import {
   buildDispatchFeed,
   type DispatchFeedJob, type DispatchFeedLoad, type DispatchFeedMark,
-  type DispatchFeedPackage,
+  type DispatchFeedPackage, type DispatchFeedStage,
 } from '@/lib/fab-dispatch-feed'
 
 export const dynamic = 'force-dynamic'
@@ -49,7 +49,7 @@ export async function GET(req: NextRequest) {
 
   const admin = getSupabaseAdmin()
   let jobs: DispatchFeedJob[], loads: DispatchFeedLoad[], marks: DispatchFeedMark[]
-  let packages: DispatchFeedPackage[]
+  let packages: DispatchFeedPackage[], stages: DispatchFeedStage[]
   try {
     // Active jobs only — drop fully-dispatched history (keeps the working set,
     // and the marks query below, well under the row cap).
@@ -60,22 +60,25 @@ export async function GET(req: NextRequest) {
     const jobIds = jobs.map(j => j.id)
     if (jobIds.length === 0) return NextResponse.json({ configured: true, jobs: [] })
 
-    ;[loads, marks, packages] = await Promise.all([
+    ;[loads, marks, packages, stages] = await Promise.all([
       pageAll<DispatchFeedLoad>((f, t) => admin.from('fab_dispatch_loads')
         .select('id, fab_job_id, load_number, description, planned_date, dispatched_at, driver')
         .in('fab_job_id', jobIds).order('id').range(f, t)),
       pageAll<DispatchFeedMark>((f, t) => admin.from('fab_marks')
-        .select('fab_job_id, mark_id, section, weight_kg, quantity, status, dispatch_load_id, contractor_package_id')
+        .select('fab_job_id, mark_id, section, weight_kg, quantity, status, dispatch_load_id, contractor_package_id, delivery_stage_id')
         .in('fab_job_id', jobIds).order('fab_job_id').order('mark_id').range(f, t)),
       pageAll<DispatchFeedPackage>((f, t) => admin.from('fab_contractor_packages')
         .select('id, fab_job_id, contractor_name, contractor_contact, delivery_mode, drop_ship_released_at')
+        .in('fab_job_id', jobIds).order('id').range(f, t)),
+      pageAll<DispatchFeedStage>((f, t) => admin.from('fab_delivery_stages')
+        .select('id, fab_job_id, stage_ref, name, required_on_site_date, sequence_no')
         .in('fab_job_id', jobIds).order('id').range(f, t)),
     ])
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 })
   }
 
-  const feed = buildDispatchFeed(jobs, loads, marks, packages)
+  const feed = buildDispatchFeed(jobs, loads, marks, packages, stages)
 
   return NextResponse.json({ configured: true, jobs: feed })
 }

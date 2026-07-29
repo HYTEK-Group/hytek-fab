@@ -35,6 +35,8 @@ export interface DispatchFeedMark {
   dispatch_load_id: string | null
   /** Which contractor package fabricated this mark (null = made in-house). */
   contractor_package_id?: string | null
+  /** Which delivery stage this piece is planned into (sql/012; null = unstaged). */
+  delivery_stage_id?: string | null
 }
 /** Drop-ship released packages — the pickup-at-sub-yard hint for the dispatcher. */
 export interface DispatchFeedPackage {
@@ -44,6 +46,15 @@ export interface DispatchFeedPackage {
   contractor_contact: string | null
   delivery_mode: string
   drop_ship_released_at: string | null
+}
+/** A fab-planned delivery stage (the Hub mirrors each onto the /deliveries board). */
+export interface DispatchFeedStage {
+  id: string
+  fab_job_id: string
+  stage_ref: string
+  name: string
+  required_on_site_date: string | null
+  sequence_no: number
 }
 
 export interface DispatchUnit {
@@ -70,6 +81,20 @@ export interface DispatchPickup {
   tonnes: number
   pieces: number
 }
+/** A fab-planned delivery stage, ready for the Hub to mirror onto the board.
+ *  CONTRACT: `tonnes`/`marks` here are the PLAN and deliberately OVERLAP the same
+ *  job's `loads`, `unassigned_ready` and `pickups` (a stage is what's intended for
+ *  a drop; loads/ready/pickups are the physical roll-up as it happens). Consumers
+ *  MUST NOT sum stages with loads/ready/pickups — that double-counts the steel. */
+export interface DispatchStageOut {
+  stage_ref: string
+  name: string
+  required_on_site_date: string | null
+  sequence_no: number
+  marks: DispatchUnit[]
+  tonnes: number
+  pieces: number
+}
 
 export interface DispatchJobOut {
   quote_number: string
@@ -83,6 +108,8 @@ export interface DispatchJobOut {
   tonnes_ready: number
   /** Drop-ship steel: collect from these subcontractor yards, not the factory. */
   pickups: DispatchPickup[]
+  /** Fab-planned delivery stages (pieces + on-site date + build order). */
+  stages: DispatchStageOut[]
 }
 
 const toUnit = (m: DispatchFeedMark): DispatchUnit => ({
@@ -101,6 +128,7 @@ export function buildDispatchFeed(
   loads: DispatchFeedLoad[],
   marks: DispatchFeedMark[],
   packages: DispatchFeedPackage[] = [],
+  stages: DispatchFeedStage[] = [],
 ): DispatchJobOut[] {
   const loadsByJob = new Map<string, DispatchFeedLoad[]>()
   for (const l of loads) {
@@ -116,6 +144,11 @@ export function buildDispatchFeed(
   for (const p of packages) {
     const a = packagesByJob.get(p.fab_job_id) ?? []
     a.push(p); packagesByJob.set(p.fab_job_id, a)
+  }
+  const stagesByJob = new Map<string, DispatchFeedStage[]>()
+  for (const s of stages) {
+    const a = stagesByJob.get(s.fab_job_id) ?? []
+    a.push(s); stagesByJob.set(s.fab_job_id, a)
   }
 
   const out: DispatchJobOut[] = []
@@ -162,8 +195,26 @@ export function buildDispatchFeed(
         }
       })
 
+    // Fab-planned delivery stages (the Hub mirrors these onto the board). Built
+    // EARLY — a stage exists before its steel is ready — so a job with stages is
+    // surfaced even if nothing is loaded/ready yet.
+    const stagesOut: DispatchStageOut[] = (stagesByJob.get(job.id) ?? [])
+      .slice().sort((a, b) => a.sequence_no - b.sequence_no || a.stage_ref.localeCompare(b.stage_ref))
+      .map(s => {
+        const units = jobMarks.filter(m => m.delivery_stage_id === s.id).map(toUnit)
+        return {
+          stage_ref: s.stage_ref,
+          name: s.name,
+          required_on_site_date: s.required_on_site_date,
+          sequence_no: s.sequence_no,
+          marks: units,
+          tonnes: tonnesOf(units),
+          pieces: units.reduce((sum, u) => sum + u.quantity, 0),
+        }
+      })
+
     // Only surface jobs that are actually relevant to dispatch.
-    if (loadsOut.length === 0 && unassignedReady.length === 0 && !job.dispatch_requested_at) continue
+    if (loadsOut.length === 0 && unassignedReady.length === 0 && stagesOut.length === 0 && !job.dispatch_requested_at) continue
 
     out.push({
       quote_number: job.quote_number,
@@ -175,6 +226,7 @@ export function buildDispatchFeed(
       unassigned_ready: unassignedReady,
       tonnes_ready: tonnesOf(unassignedReady),
       pickups,
+      stages: stagesOut,
     })
   }
 

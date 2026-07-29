@@ -9,7 +9,7 @@ function mark(p: Partial<FabMark>): FabMark {
     id: 'm', fab_job_id: 'j', mark_id: 'A1', description: null, section: null,
     length_mm: null, weight_kg: null, quantity: 1, status: 'not_started',
     note: null, contractor_package_id: null, assigned_to: null,
-    rework_count: 0, rework_note: null, dispatch_load_id: null,
+    rework_count: 0, rework_note: null, dispatch_load_id: null, delivery_stage_id: null,
     suggested_minutes: null, allotted_minutes: null, assigned_at: null,
     started_at: null, finished_at: null, actual_minutes: null,
     drawing_file: null, drawing_page: null, part_count: null,
@@ -91,10 +91,10 @@ describe('computeProgressRow', () => {
     const loads: FabDispatchLoad[] = [
       { id: 'L1', fab_job_id: 'job-1', load_number: 1, description: 'beams',
         planned_date: '2026-06-27', dispatched_at: '2026-06-27', driver: 'Bob',
-        note: null, created_by: 'sup', created_at: '' },
+        note: null, created_by: 'sup', created_at: '', delivery_stage_id: null },
       { id: 'L2', fab_job_id: 'job-1', load_number: 2, description: 'plates',
         planned_date: '2026-06-28', dispatched_at: null, driver: null,
-        note: null, created_by: 'sup', created_at: '' },
+        note: null, created_by: 'sup', created_at: '', delivery_stage_id: null },
     ]
     const marks = [
       mark({ id: '1', status: 'qc_passed', dispatch_load_id: 'L1' }),
@@ -111,7 +111,7 @@ describe('computeProgressRow', () => {
     const loads: FabDispatchLoad[] = [
       { id: 'L1', fab_job_id: 'job-1', load_number: 1, description: null,
         planned_date: null, dispatched_at: '2026-06-27', driver: null, note: null,
-        created_by: 'sup', created_at: '' },
+        created_by: 'sup', created_at: '', delivery_stage_id: null },
     ]
     const marks = [
       mark({ id: '1', status: 'qc_passed', dispatch_load_id: 'L1' }),
