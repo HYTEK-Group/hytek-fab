@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   buildDispatchFeed,
   type DispatchFeedJob, type DispatchFeedLoad, type DispatchFeedMark,
-  type DispatchFeedPackage,
+  type DispatchFeedPackage, type DispatchFeedStage,
 } from '../fab-dispatch-feed'
 
 const job = (p: Partial<DispatchFeedJob>): DispatchFeedJob => ({
@@ -143,5 +143,63 @@ describe('buildDispatchFeed', () => {
       ],
     )
     expect(feed[0].pickups).toHaveLength(0)
+  })
+
+  // ── delivery stages (the plan the Hub mirrors onto the board) ──────────────
+
+  const stage = (p: Partial<DispatchFeedStage>): DispatchFeedStage => ({
+    id: 'ST1', fab_job_id: 'J1', stage_ref: 'st_abc', name: 'Stage 1',
+    required_on_site_date: '2026-08-08', sequence_no: 1, ...p,
+  })
+
+  it('surfaces a job that only has stages (planned early, nothing ready yet)', () => {
+    const feed = buildDispatchFeed(
+      [job({})], [],
+      [
+        mark({ mark_id: 'B1', status: 'not_started', weight_kg: 500, quantity: 2, delivery_stage_id: 'ST1' }),
+        mark({ mark_id: 'B2', status: 'not_started', weight_kg: 250, quantity: 1, delivery_stage_id: 'ST1' }),
+      ],
+      [], [stage({})],
+    )
+    expect(feed).toHaveLength(1)
+    expect(feed[0].stages).toHaveLength(1)
+    expect(feed[0].stages[0].stage_ref).toBe('st_abc')
+    expect(feed[0].stages[0].required_on_site_date).toBe('2026-08-08')
+    expect(feed[0].stages[0].marks.map(m => m.mark_id)).toEqual(['B1', 'B2'])
+    expect(feed[0].stages[0].tonnes).toBe(1.25)
+    expect(feed[0].stages[0].pieces).toBe(3)
+  })
+
+  it('breaks a shared sequence_no deterministically by stage_ref (no reload flip)', () => {
+    const build = (order: DispatchFeedStage[]) => buildDispatchFeed(
+      [job({})], [],
+      [
+        mark({ mark_id: 'A', status: 'not_started', weight_kg: 100, quantity: 1, delivery_stage_id: 'S_b' }),
+        mark({ mark_id: 'B', status: 'not_started', weight_kg: 100, quantity: 1, delivery_stage_id: 'S_a' }),
+      ],
+      [], order,
+    )[0].stages.map(s => s.stage_ref)
+    // Same sequence_no on both stages; whatever order the DB hands us, the feed
+    // must always return them in the same (stage_ref-sorted) order.
+    const a = stage({ id: 'S_a', stage_ref: 's_aaa', sequence_no: 1 })
+    const b = stage({ id: 'S_b', stage_ref: 's_bbb', sequence_no: 1 })
+    expect(build([a, b])).toEqual(['s_aaa', 's_bbb'])
+    expect(build([b, a])).toEqual(['s_aaa', 's_bbb'])
+  })
+
+  it('orders stages by build sequence and only counts their own pieces', () => {
+    const feed = buildDispatchFeed(
+      [job({})], [],
+      [
+        mark({ mark_id: 'A', status: 'not_started', weight_kg: 100, quantity: 1, delivery_stage_id: 'ST2' }),
+        mark({ mark_id: 'B', status: 'not_started', weight_kg: 100, quantity: 1, delivery_stage_id: 'ST1' }),
+        mark({ mark_id: 'C', status: 'not_started', weight_kg: 100, quantity: 1, delivery_stage_id: null }), // unstaged
+      ],
+      [],
+      [stage({ id: 'ST1', stage_ref: 's1', sequence_no: 1 }), stage({ id: 'ST2', stage_ref: 's2', sequence_no: 2 })],
+    )
+    expect(feed[0].stages.map(s => s.stage_ref)).toEqual(['s1', 's2'])
+    expect(feed[0].stages[0].marks.map(m => m.mark_id)).toEqual(['B'])
+    expect(feed[0].stages[1].marks.map(m => m.mark_id)).toEqual(['A'])
   })
 })

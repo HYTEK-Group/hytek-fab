@@ -85,6 +85,8 @@ export interface FabMark {
   rework_count: number
   rework_note: string | null
   dispatch_load_id: string | null
+  /** Which delivery stage this piece belongs to (sql/012); null = unstaged. */
+  delivery_stage_id: string | null
   // ── per-assembly assignment + time + drawing (sql/006) ──
   suggested_minutes: number | null // what the app suggested (measures the learning)
   allotted_minutes: number | null  // supervisor's allotted time (his edit)
@@ -119,6 +121,24 @@ export interface FabProofPhoto {
   /** Server-computed SHA-256 of the image bytes — the same shot can't be reused (sql/010). */
   image_sha256: string | null
   created_at: string
+}
+
+// ── fab_delivery_stages (the fab-owned delivery plan, sql/012) ───────────────
+// A stage = an ordered set of a job's pieces + a required-on-site date, in
+// install build order. Fab owns it; exposed read-only on the dispatch bridge;
+// the Hub mirrors each stage onto the /deliveries board (flow_parcels).
+export interface FabDeliveryStage {
+  id: string
+  fab_job_id: string
+  /** Stable cross-app ref — the Hub uses it as the parcel_ref on the board. */
+  stage_ref: string
+  name: string
+  required_on_site_date: string | null
+  sequence_no: number
+  note: string | null
+  created_by: string
+  created_at: string
+  updated_at: string
 }
 
 // A mark enriched with its learned time suggestion (for the assign view).
@@ -329,6 +349,8 @@ export interface FabDispatchLoad {
   dispatched_at: string | null
   driver: string | null
   note: string | null
+  /** The delivery stage this load fulfils (sql/012); loads roll up into a stage. */
+  delivery_stage_id: string | null
   created_by: string
   created_at: string
 }
