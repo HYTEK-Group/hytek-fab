@@ -24,6 +24,7 @@ export async function GET(req: NextRequest) {
       fab_marks(id, status, weight_kg, quantity, dispatch_load_id),
       fab_contractor_packages(id, status, package_type, expected_return_date)
     `)
+    .not('is_test', 'is', true)
     .order('created_at', { ascending: false })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

@@ -18,6 +18,7 @@ export async function GET(req: NextRequest) {
     .from('fab_jobs')
     .select('id, quote_number, name')
     .eq('status', 'in_progress')
+    .not('is_test', 'is', true)
 
   const jobIds = (activeJobs ?? []).map((j: { id: string }) => j.id)
   if (jobIds.length === 0) return NextResponse.json({ crew: [] })

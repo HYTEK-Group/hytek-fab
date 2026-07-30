@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
 
   const { data: tasks, error: taskErr } = await admin
     .from('fab_tasks')
-    .select('id, fab_job_id, description, status, fab_jobs(id, name, quote_number)')
+    .select('id, fab_job_id, description, status, fab_jobs(id, name, quote_number, is_test)')
     .eq('assigned_to', name)
     .neq('status', 'done')
     .order('created_at', { ascending: true })
@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
 
   const { data: marks, error: markErr } = await admin
     .from('fab_marks')
-    .select('id, fab_job_id, mark_id, description, status, fab_jobs(id, name, quote_number)')
+    .select('id, fab_job_id, mark_id, description, status, fab_jobs(id, name, quote_number, is_test)')
     .eq('assigned_to', name)
     .is('contractor_package_id', null)
     .in('status', ['not_started', 'in_progress'])
@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     worker_name: name,
     role: session.role,
-    tasks: tasks ?? [],
-    marks: marks ?? [],
+    tasks: (tasks ?? []).filter((t) => (t as { fab_jobs?: { is_test?: boolean } }).fab_jobs?.is_test !== true),
+    marks: (marks ?? []).filter((m) => (m as { fab_jobs?: { is_test?: boolean } }).fab_jobs?.is_test !== true),
   })
 }

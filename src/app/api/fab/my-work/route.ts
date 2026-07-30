@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
   const admin = getSupabaseAdmin()
   const { data, error } = await admin
     .from('fab_marks')
-    .select('id, fab_job_id, mark_id, description, section, weight_kg, quantity, status, allotted_minutes, actual_minutes, started_at, finished_at, drawing_page, fab_jobs(quote_number, name, on_site_date)')
+    .select('id, fab_job_id, mark_id, description, section, weight_kg, quantity, status, allotted_minutes, actual_minutes, started_at, finished_at, drawing_page, fab_jobs(quote_number, name, on_site_date, is_test)')
     .eq('assigned_to', caller.name)
     .order('mark_id')
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

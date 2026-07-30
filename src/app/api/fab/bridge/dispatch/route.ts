@@ -56,6 +56,7 @@ export async function GET(req: NextRequest) {
     jobs = await pageAll<DispatchFeedJob>((f, t) => admin.from('fab_jobs')
       .select('id, quote_number, hubspot_deal_id, name, on_site_date, dispatch_requested_at')
       .neq('status', 'dispatched')
+      .not('is_test', 'is', true)
       .order('id').range(f, t))
     const jobIds = jobs.map(j => j.id)
     if (jobIds.length === 0) return NextResponse.json({ configured: true, jobs: [] })
