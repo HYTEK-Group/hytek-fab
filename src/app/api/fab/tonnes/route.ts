@@ -74,11 +74,13 @@ export async function GET(req: NextRequest) {
   const admin = getSupabaseAdmin()
   const { data, error } = await admin
     .from('fab_weekly_entries')
-    .select('*, fab_jobs(name, client)')
+    .select('*, fab_jobs(name, client, is_test)')
     .order('week_start', { ascending: false })
     .order('created_at', { ascending: false })
     .limit(limit)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ entries: data ?? [] })
+  // Drop test-job entries (fleet clean-up 28/07).
+  const entries = (data ?? []).filter((e) => (e as { fab_jobs?: { is_test?: boolean } }).fab_jobs?.is_test !== true)
+  return NextResponse.json({ entries })
 }

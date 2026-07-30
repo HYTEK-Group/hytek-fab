@@ -27,6 +27,7 @@ export async function GET(req: NextRequest) {
   const { data: allJobs, error } = await admin
     .from('jobs')
     .select('id, quote_number, name, client, location')
+    .not('is_test', 'is', true) // test jobs never offered to Start Fabrication
     .order('created_at', { ascending: false })
     .limit(200)
 
