@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
   const admin = getSupabaseAdmin()
   const { data: rows, error } = await admin
     .from('fab_pins')
-    .select('id, worker_name, pin_hash, role, is_active')
+    .select('id, worker_name, pin_hash, role, is_active, profile_id')
     .eq('is_active', true)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
   for (const row of rows ?? []) {
     if (await verifyPin(pin, row.pin_hash)) {
       const role = row.role as UserRole
-      const token = createKioskToken(row.worker_name, role)
+      const token = createKioskToken(row.worker_name, role, row.profile_id)
       try {
         await clearPinFailures(admin, ip) // reset the throttle on success — best-effort
       } catch {

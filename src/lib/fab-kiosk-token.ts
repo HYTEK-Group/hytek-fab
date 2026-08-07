@@ -6,6 +6,9 @@ export interface KioskSession {
   worker_name: string
   role: 'admin' | 'supervisor' | 'fabricator'
   exp: number // unix seconds
+  /** Owner's Supabase profile id, when the PIN is linked to a login. Lets the
+   *  gatekeeper treat this person's kiosk and login actions as the same human. */
+  profile_id?: string | null
 }
 
 const TTL_SECONDS = 30 * 60
@@ -16,9 +19,15 @@ function secret(): string {
   return s
 }
 
-export function createKioskToken(worker_name: string, role: KioskSession['role']): string {
+export function createKioskToken(
+  worker_name: string,
+  role: KioskSession['role'],
+  profile_id?: string | null,
+): string {
   const exp = Math.floor(Date.now() / 1000) + TTL_SECONDS
-  const payload = Buffer.from(JSON.stringify({ worker_name, role, exp })).toString('base64url')
+  const body: Record<string, unknown> = { worker_name, role, exp }
+  if (profile_id) body.profile_id = profile_id
+  const payload = Buffer.from(JSON.stringify(body)).toString('base64url')
   const sig = createHmac('sha256', secret()).update(payload).digest('base64url')
   return `${payload}.${sig}`
 }

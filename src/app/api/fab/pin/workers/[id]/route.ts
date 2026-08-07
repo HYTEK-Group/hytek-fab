@@ -13,7 +13,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (!caller) return NextResponse.json({ error: 'Supervisor or admin required' }, { status: 403 })
   const { id } = await params
   const body = (await req.json()) as
-    { pin?: string; role?: UserRole; is_active?: boolean; worker_name?: string }
+    { pin?: string; role?: UserRole; is_active?: boolean; worker_name?: string; profile_id?: string | null }
 
   if (body.role === 'admin' && caller.role !== 'admin') {
     return NextResponse.json({ error: 'Only an admin can grant the admin role' }, { status: 403 })
@@ -23,6 +23,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (body.worker_name !== undefined) patch.worker_name = body.worker_name.trim()
   if (body.role !== undefined) patch.role = body.role
   if (body.is_active !== undefined) patch.is_active = body.is_active
+  // Link/unlink this PIN to a login (null clears). Only an admin may change the
+  // link — it's what the gatekeeper four-eyes control keys on.
+  if (body.profile_id !== undefined) {
+    if (caller.role !== 'admin') return NextResponse.json({ error: 'Only an admin can link a PIN to a login' }, { status: 403 })
+    patch.profile_id = body.profile_id || null
+  }
   if (body.pin !== undefined) {
     if (!isValidPinFormat(body.pin)) {
       return NextResponse.json({ error: 'PIN must be 4 digits' }, { status: 400 })
@@ -38,7 +44,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     .from('fab_pins')
     .update(patch)
     .eq('id', id)
-    .select('id, worker_name, role, is_active, created_at')
+    .select('id, worker_name, role, is_active, created_at, profile_id')
     .single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ worker: data })
