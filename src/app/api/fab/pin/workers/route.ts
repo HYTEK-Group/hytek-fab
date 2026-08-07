@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
   const admin = getSupabaseAdmin()
   const { data, error } = await admin
     .from('fab_pins')
-    .select('id, worker_name, role, is_active, created_at')
+    .select('id, worker_name, role, is_active, created_at, profile_id')
     .order('worker_name', { ascending: true })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ workers: data ?? [] })

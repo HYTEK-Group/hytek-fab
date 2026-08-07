@@ -20,12 +20,18 @@ function bearer(request: NextRequest): string {
   return request.headers.get('authorization')?.replace('Bearer ', '').trim() ?? ''
 }
 
-// A kiosk caller is identified by their PIN's worker_name (the only stable handle
-// the token carries); a Supabase caller by their profile uuid, displayed by name.
-function kioskCaller(worker_name: string, role: UserRole): CallerInfo {
-  return { role, name: worker_name, ns: 'kiosk', key: `pin:${worker_name}` }
+// A kiosk caller is identified by their PIN's worker_name — UNLESS the PIN is
+// linked to a login (profile_id), in which case they get the SAME key as that
+// login (`sb:<uuid>`) so the gatekeeper treats their kiosk and PC actions as one
+// person. ns stays 'kiosk' (that's how they authenticated — clearing is still
+// login-only regardless).
+// Exported (not just used here) so the identity-composition logic itself is
+// unit-testable against fab-gatekeeper's sameHuman/canClearException — see
+// fab-auth.test.ts.
+export function kioskCaller(worker_name: string, role: UserRole, profile_id?: string | null): CallerInfo {
+  return { role, name: worker_name, ns: 'kiosk', key: profile_id ? `sb:${profile_id}` : `pin:${worker_name}` }
 }
-function supabaseCaller(user: { id: string; role: UserRole; fullName: string | null; email: string | null }): CallerInfo {
+export function supabaseCaller(user: { id: string; role: UserRole; fullName: string | null; email: string | null }): CallerInfo {
   return { role: user.role, name: user.fullName ?? user.email ?? user.id, ns: 'supabase', key: `sb:${user.id}` }
 }
 
@@ -37,7 +43,7 @@ export async function getSupervisorCaller(request: NextRequest): Promise<CallerI
   const kiosk = verifyKioskToken(token)
   if (kiosk) {
     if (kiosk.role !== 'supervisor' && kiosk.role !== 'admin') return null
-    return kioskCaller(kiosk.worker_name, kiosk.role)
+    return kioskCaller(kiosk.worker_name, kiosk.role, kiosk.profile_id)
   }
 
   const user = await requireFabSupervisor(request)
