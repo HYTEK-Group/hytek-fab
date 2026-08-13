@@ -13,3 +13,7 @@ node_modules/
 # ss-ingest bridge (server-only secrets + log)
 scripts/ss-ingest-bridge.env.cmd
 scripts/ss-ingest-bridge.log
+
+# TypeScript incremental build state — machine-local, never commit
+tsconfig.tsbuildinfo
+*.tsbuildinfo
