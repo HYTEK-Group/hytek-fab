@@ -8,12 +8,14 @@ import { useAuth } from '@/lib/auth-context'
 import { AppShell } from '@/components/app-shell'
 import { supabase } from '@/lib/supabase'
 
-interface Worker { id: string; worker_name: string; role: string; is_active: boolean }
+interface Worker { id: string; worker_name: string; role: string; is_active: boolean; profile_id: string | null }
+interface LoginProfile { id: string; full_name: string | null; role: string }
 
 export default function AdminWorkersPage() {
   const { user, profile, loading } = useAuth()
   const router = useRouter()
   const [workers, setWorkers] = useState<Worker[]>([])
+  const [profiles, setProfiles] = useState<LoginProfile[]>([])
   const [name, setName] = useState('')
   const [pin, setPin] = useState('')
   const [role, setRole] = useState('fabricator')
@@ -27,9 +29,22 @@ export default function AdminWorkersPage() {
   }, [])
 
   const load = useCallback(async () => {
-    const res = await fetch('/api/fab/pin/workers', { headers: await authHeader() })
-    if (res.ok) setWorkers((await res.json()).workers ?? [])
+    const [wr, pr] = await Promise.all([
+      fetch('/api/fab/pin/workers', { headers: await authHeader() }),
+      fetch('/api/fab/pin/profiles', { headers: await authHeader() }),
+    ])
+    if (wr.ok) setWorkers((await wr.json()).workers ?? [])
+    if (pr.ok) setProfiles((await pr.json()).profiles ?? [])
   }, [authHeader])
+
+  async function linkLogin(id: string, profile_id: string) {
+    const res = await fetch(`/api/fab/pin/workers/${id}`, {
+      method: 'PATCH', headers: await authHeader(true),
+      body: JSON.stringify({ profile_id: profile_id || null }),
+    })
+    setMsg(res.ok ? '✓ Login link updated' : '❌ ' + ((await res.json()).error ?? 'Failed'))
+    load()
+  }
 
   useEffect(() => { if (!loading && !user) router.push('/login') }, [user, loading, router])
   useEffect(() => { if (user) load() }, [user, load])
@@ -64,6 +79,7 @@ export default function AdminWorkersPage() {
 
   if (loading || !user) return null
   const canManage = profile?.role === 'admin' || profile?.role === 'supervisor'
+  const isAdmin = profile?.role === 'admin'
 
   return (
     <AppShell>
@@ -95,8 +111,18 @@ export default function AdminWorkersPage() {
         <div className="flex flex-col gap-1">
           {workers.filter(w => w.is_active).length === 0 && <p className="text-sm" style={{ color: 'var(--text-2)' }}>No workers yet.</p>}
           {workers.filter(w => w.is_active).map(w => (
-            <div key={w.id} className="rounded-lg p-2 flex items-center gap-2" style={{ background: 'var(--surface)', border: '0.5px solid var(--border)' }}>
-              <span className="text-sm flex-1" style={{ color: 'var(--foreground)' }}>{w.worker_name} <span style={{ color: 'var(--text-2)' }}>· {w.role}</span></span>
+            <div key={w.id} className="rounded-lg p-2 flex items-center gap-2 flex-wrap" style={{ background: 'var(--surface)', border: '0.5px solid var(--border)' }}>
+              <span className="text-sm flex-1" style={{ color: 'var(--foreground)', minWidth: 120 }}>{w.worker_name} <span style={{ color: 'var(--text-2)' }}>· {w.role}</span></span>
+              {/* Link a PIN to its owner's login so the gatekeeper treats their
+                  tablet + PC actions as one person (admins/supervisors who clear
+                  exceptions). Admin-only. */}
+              {isAdmin && (w.role === 'admin' || w.role === 'supervisor') && (
+                <select value={w.profile_id ?? ''} onChange={e => linkLogin(w.id, e.target.value)} title="Linked login (for gatekeeper)"
+                  style={{ ...inp, fontSize: 12, padding: '5px 8px', maxWidth: 190 }}>
+                  <option value="">Login: not linked</option>
+                  {profiles.map(p => <option key={p.id} value={p.id}>Login: {p.full_name}</option>)}
+                </select>
+              )}
               {canManage && (
                 <>
                   <button onClick={() => changePin(w.id)} className="text-xs px-2 py-1 rounded" style={{ background: 'transparent', border: '0.5px solid var(--border)', color: 'var(--text-3)', cursor: 'pointer' }}>Change PIN</button>

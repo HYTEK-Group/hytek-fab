@@ -16,6 +16,17 @@ describe('fab-kiosk-token', () => {
     expect(session!.exp).toBeGreaterThan(0)
   })
 
+  it('round-trips an optional profile_id (PIN linked to a login)', () => {
+    const token = createKioskToken('Scott Textor', 'admin', 'uuid-scott')
+    const session = verifyKioskToken(token)
+    expect(session!.profile_id).toBe('uuid-scott')
+  })
+
+  it('omits profile_id when the PIN is not linked', () => {
+    const session = verifyKioskToken(createKioskToken('Bob', 'fabricator'))
+    expect(session!.profile_id).toBeUndefined()
+  })
+
   it('rejects a tampered payload', () => {
     const token = createKioskToken('Jamie', 'fabricator')
     const [, sig] = token.split('.')
