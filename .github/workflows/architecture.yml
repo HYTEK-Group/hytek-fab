@@ -1,0 +1,24 @@
+name: architecture
+# Static side-door check: fails when the code does something SYSTEM.md does not
+# declare (a write to a table this repo does not own, an undeclared RPC, a fetch
+# to an unapproved host, a new Supabase project ref or privileged env name, an
+# unregistered cron route, an expired exemption).
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [main, master]
+
+jobs:
+  architecture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test:architecture
