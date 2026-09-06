@@ -10,11 +10,17 @@
 # stale success (PR got new commits meanwhile) no longer matches head and is
 # skipped. If the org ever upgrades plans, add branch protection requiring the
 # "tests" check and this file can revert to native auto-merge.
+#
+# TWO checks gate the merge, not one: "PR tests" (job `tests`) and "architecture"
+# (job `architecture`). Either workflow finishing green wakes this one; the step
+# below then asks the API for BOTH check-runs on the head commit and exits quietly
+# unless both are `success`. So whichever finishes second does the merging, and a
+# green tests run alone can no longer merge a PR that adds a side door.
 name: Auto-merge
 
 on:
   workflow_run:
-    workflows: ["PR tests"]
+    workflows: ["PR tests", "architecture"]
     types: [completed]
 
 permissions:
@@ -35,9 +41,18 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
+          # BOTH required checks must be green on this exact commit. Whichever
+          # workflow finishes second finds two successes here and merges; the
+          # first one to finish exits quietly.
+          JQ_BOTH='[.check_runs[] | select(.name=="tests" or .name=="architecture") | .conclusion] | length==2 and all(.=="success")'
+          OK=$(gh api "repos/$REPO/commits/$HEAD_SHA/check-runs" --jq "$JQ_BOTH")
+          if [ "$OK" != "true" ]; then
+            echo "Waiting for the other check — tests and architecture must both be green."
+            exit 0
+          fi
           # Find the open, non-draft PR whose CURRENT head is the commit that
           # passed. If the PR was pushed to since, there is no match and we
-          # skip — the newer commit gets its own tests run + merge attempt.
+          # skip — the newer commit gets its own checks run + merge attempt.
           PR_NUMBER=$(gh pr list --repo "$REPO" --state open \
             --json number,isDraft,headRefOid \
             --jq ".[] | select(.headRefOid == \"$HEAD_SHA\" and (.isDraft | not)) | .number" | head -1)
@@ -45,5 +60,5 @@ jobs:
             echo "No open non-draft PR with head $HEAD_SHA — nothing to merge."
             exit 0
           fi
-          echo "Tests green on PR #$PR_NUMBER @ $HEAD_SHA — merging."
+          echo "Tests and architecture green on PR #$PR_NUMBER @ $HEAD_SHA — merging."
           gh pr merge --squash --repo "$REPO" "$PR_NUMBER"
