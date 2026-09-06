@@ -1,6 +1,7 @@
 'use client'
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
+import { PROFILE_BROWSER_COLUMNS } from './profile-columns'
 import { User } from '@supabase/supabase-js'
 import { supabase } from './supabase'
 import type { Profile } from './types'
@@ -29,7 +30,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function fetchProfile(userId: string) {
     const { data } = await supabase
       .from('profiles')
-      .select('*')
+      .select(PROFILE_BROWSER_COLUMNS)
       .eq('id', userId)
       .single()
     if (data) setProfile(data as Profile)
