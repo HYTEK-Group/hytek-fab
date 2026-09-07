@@ -44,9 +44,11 @@ hosts:
   approved:
     - hub.hytekframing.com.au
     - hytek-fab.vercel.app
+    - "*.ingest.sentry.io"   # Sentry error reporting — Lane 0 CP3 wired it; the app talks to Sentry only when NEXT_PUBLIC_SENTRY_DSN is set
 env:
   privileged:
     - SUPABASE_SERVICE_ROLE_KEY
+    - SENTRY_AUTH_TOKEN   # source-map upload at BUILD time only (next.config.ts); never read at runtime
 crons: []
 events:
   out: []
@@ -83,7 +85,8 @@ exemptions:
    straight into the Hub's tables.
 7. **Who it calls.** The Hub only (`src/lib/hub.ts`, `HUB_INTERNAL_TOKEN` — the
    unscoped Hub-wide token, not a fab-scoped one). No HubSpot, Xero, Asana, Slack,
-   Resend, Sentry or invoicing calls.
+   Resend or invoicing calls. Sentry is wired (see below) and is the one
+   external service this app talks to directly.
 8. **Who calls it.** hytek-detailing's dispatch pages, through
    `GET /api/fab/bridge/dispatch` and `/api/fab/bridge/proof/[quote]` with
    `FAB_BRIDGE_TOKEN`; and the office-server ingest bridge, which mints its own
@@ -95,5 +98,15 @@ exemptions:
 10. **The rule.** `npm run test:architecture` fails on anything this file does not
     declare. Do not widen it to make a change pass — close the door instead, or
     raise it with the lane that owns it.
-</content>
-</invoke>
+
+**Sentry (Lane 0 CP3, 07/09/2026).** `@sentry/nextjs` is wired the same way in all
+seven apps: `instrumentation.ts` / `instrumentation-client.ts` / `sentry.server.config.ts`
+/ `sentry.edge.config.ts`, and `next.config.ts` wraps the build with
+`withSentryConfig` **only when `NEXT_PUBLIC_SENTRY_DSN` is set**. No session replay —
+these screens carry money and staff data. With no DSN the app is byte-identical to
+before and sends nothing.
+
+`GET /api/health/sentry-test` is a **temporary** delivery proof, gated on
+`CRON_SECRET` and failing closed without it (503) and without a DSN (503, and it
+says so rather than returning a 200 for a message it never sent).
+**Lane 13 deletes that route at cutover — owner Lane 13, on or before 31/10/2026.**
