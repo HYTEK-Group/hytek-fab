@@ -16,6 +16,8 @@ import { randomUUID } from 'crypto'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { getSubCaller, grantedPackage } from '@/lib/fab-sub-auth'
 import { imageSha256, duplicatePhotoCheck, isUniqueViolation } from '@/lib/fab-photo-dedupe'
+import { sendFabEventLogged } from '@/lib/hub-events'
+import { buildProofEvent } from '@/lib/hub-event-builders'
 import type { ProofStage } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
@@ -90,6 +92,22 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'This exact photo is already used on this job. Take a fresh photo of the actual piece.' }, { status: 409 })
     }
     return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+
+  // Same chain, same event. A subcontractor's proof reaches the Hub exactly the
+  // way Brisbane-made steel's does — that is the whole point of the
+  // substitution: one evidence trail, whoever made the piece.
+  const { data: subJob } = await admin
+    .from('fab_jobs').select('quote_number, hubspot_deal_id').eq('id', pkg.fab_job_id).single()
+  if (subJob?.quote_number) {
+    await sendFabEventLogged(admin, buildProofEvent({
+      quoteNumber: subJob.quote_number,
+      dealId: subJob.hubspot_deal_id,
+      stage, photoId: row.id, path,
+      takenAt: row.taken_at,
+      markId, packageId, loadId: null,
+      takenBy: caller.stamp,
+    }), pkg.fab_job_id, caller.stamp)
   }
 
   const { data: signed } = await admin.storage.from('fab-proof').createSignedUrl(path, 3600)
