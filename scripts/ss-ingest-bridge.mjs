@@ -23,33 +23,43 @@
  *   SS_YEAR_ROOT               e.g. "Y:\\(17) 2026 HYTEK PROJECTS"   (required)
  *   FAB_URL                    https://hytek-fab.vercel.app          (default)
  *   KIOSK_SECRET               same value as the fab app             (required)
- *   SUPABASE_URL               fab project URL                       (required)
- *   SUPABASE_SERVICE_ROLE_KEY  fab service role key                  (required)
- *   RELEASES_ONLY=1            only ingest jobs the Hub reports released (ss_release).
- *                              Requires HUB_BASE + HUB token below.  (optional)
- *   HUB_BASE                   e.g. https://hub.hytekframing.com.au  (for RELEASES_ONLY)
- *   HUB_INTERNAL_TOKEN         Hub read token (or HUB_TOKEN_LWS)     (for RELEASES_ONLY)
  *   DRY_RUN=1                  list what it WOULD do, change nothing (optional)
  *   MAX_JOBS=N                 cap the number of jobs this run        (optional)
+ *   RELEASES_ONLY=0            ingest ungated (NOT recommended)       (optional)
  *
- * Default (no RELEASES_ONLY): loads every job that has Tekla IFF reports present.
- * Once the "Release to Factory" pipeline is deployed, set RELEASES_ONLY=1 +
- * HUB_BASE + a Hub token to gate ingest on the Hub's ss_release signal.
+ * THIS SCRIPT HOLDS NO DATABASE CREDENTIAL. It used to carry SUPABASE_URL and
+ * SUPABASE_SERVICE_ROLE_KEY and write fab_jobs and the fab-drawings bucket
+ * directly. It is now a pure HTTP client of the fab app, holding only the kiosk
+ * secret it already needed. A script on an office server with a service-role key
+ * is a copy of the whole database sitting in a .env file on a Windows box.
+ *
+ * AND IT CAN NO LONGER INVENT A JOB NUMBER. It used to read the folder name as
+ * the job number whenever the name was not HG######, so "26070101 - Smith Road"
+ * minted a fab job called `26070101 - Smith Road`. Numbers are now parsed by
+ * scripts/lib/job-ref.mjs (8-digit first, then HG/HM, else SKIP) and validated
+ * by POST /api/fab/jobs against the Hub's own jobs table.
+ *
+ * RELEASES_ONLY DEFAULTS TO ON. The old ungated default was a pre-release
+ * convenience from before the Release to Factory pipeline existed; leaving it
+ * that way meant the bridge started fabrication on any job with drawings on the
+ * drive. The release check now asks FAB, not the Hub, so the bridge talks to
+ * exactly one app. Set RELEASES_ONLY=0 to go back to ungated, deliberately.
+ *
+ * Lane 12 turns this into the `fab-ingest` plugin of the hytek-bridge service;
+ * after this change it is already a pure HTTP client, so that is a move, not a
+ * rewrite.
  */
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { createHmac } from 'node:crypto'
-import { createClient } from '@supabase/supabase-js'
+import { jobNameFromFolder, jobRefFromFolder } from './lib/job-ref.mjs'
 
 const cfg = {
   yearRoot: process.env.SS_YEAR_ROOT,
   fabUrl: process.env.FAB_URL || 'https://hytek-fab.vercel.app',
   kioskSecret: process.env.KIOSK_SECRET,
-  supabaseUrl: process.env.SUPABASE_URL,
-  serviceKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
-  hubBase: (process.env.HUB_BASE || '').replace(/\/$/, ''),
-  hubToken: process.env.HUB_INTERNAL_TOKEN || process.env.HUB_TOKEN_LWS || '',
-  releasesOnly: process.env.RELEASES_ONLY === '1',
+  // Opt OUT, not opt in. See the header.
+  releasesOnly: process.env.RELEASES_ONLY !== '0',
   dryRun: process.env.DRY_RUN === '1',
   maxJobs: Number(process.env.MAX_JOBS || 0),
 }
@@ -58,27 +68,29 @@ const cfg = {
 // category and skips anything unrecognised).
 const BOM_RX = /(part material|material list|for ordering|plate|bolt|chemset|chem ?set|tube|loose|misc)/i
 
-/** When RELEASES_ONLY is on and the Hub is configured, only ingest jobs the Hub
- *  reports as released (ss_release present). Otherwise ingest everything. */
-async function isReleased(quoteNumber) {
+/**
+ * Has this job been released to the factory?
+ *
+ * Asks FAB, not the Hub. The bridge now talks to exactly one app and holds
+ * exactly one credential; fab is the thing that already knows, because its ready
+ * queue is fed by the Hub. FAILS CLOSED: if we cannot get an answer we do not
+ * start fabricating.
+ */
+async function isReleased(quoteNumber, token) {
   if (!cfg.releasesOnly) return true
-  if (!cfg.hubBase || !cfg.hubToken) {
-    console.log('  ! RELEASES_ONLY set but HUB_BASE/HUB token missing — ingesting ungated')
-    return true
-  }
   try {
-    const url = `${cfg.hubBase}/api/flow/job-state/_?quote_number=${encodeURIComponent(quoteNumber)}`
-    const res = await fetch(url, { headers: { Authorization: `Bearer ${cfg.hubToken}` } })
-    if (!res.ok) { console.log(`  ! Hub job-state ${res.status} — skipping (releases-only)`); return false }
-    const s = await res.json().catch(() => ({}))
-    return !!s?.ss_release
-  } catch (e) { console.log('  ! Hub unreachable — skipping (releases-only): ' + e.message); return false }
+    const url = `${cfg.fabUrl}/api/fab/ready-queue?quote=${encodeURIComponent(quoteNumber)}`
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+    if (!res.ok) { console.log(`  ! fab ready-queue ${res.status} — skipping (releases-only)`); return false }
+    const body = await res.json().catch(() => ({}))
+    const items = Array.isArray(body?.items) ? body.items : []
+    return items.some(i => i?.quote_number === quoteNumber && (i.ss_released || i.ready))
+  } catch (e) { console.log('  ! fab unreachable — skipping (releases-only): ' + e.message); return false }
 }
-for (const k of ['yearRoot', 'kioskSecret', 'supabaseUrl', 'serviceKey']) {
+for (const k of ['yearRoot', 'kioskSecret']) {
   if (!cfg[k]) { console.error('Missing required env: ' + k); process.exit(1) }
 }
 
-const sb = createClient(cfg.supabaseUrl, cfg.serviceKey)
 
 function supervisorToken() {
   const payload = Buffer.from(JSON.stringify({
@@ -117,10 +129,17 @@ function findJobs(root) {
       for (const p of bomFiles) { const k = baseKey(p); const cur = bomBest.get(k); if (!cur || iffMs(p) > iffMs(cur)) bomBest.set(k, p) }
       const dedupedBom = [...bomBest.values()]
       if (assemblies.length) {
-        const m = jobDir.match(/\b(HG\d{6,})\b/i)
+        const ref = jobRefFromFolder(jobDir)
+        if (!ref) {
+          // The old code put the WHOLE FOLDER NAME here and minted a job from
+          // it. A folder we cannot read a number from is a data question for the
+          // Monday review, not something this script guesses at.
+          console.log(`  – no job number in folder name "${jobDir}" — skipping`)
+          continue
+        }
         jobs.push({
-          jobNo: m ? m[1].toUpperCase() : jobDir,
-          name: (jobDir.replace(/^HG\d+\s*/i, '').trim()) || jobDir,
+          jobNo: ref,
+          name: jobNameFromFolder(jobDir),
           customer, assemblies, bomFiles: dedupedBom, drawings,
         })
       }
@@ -129,28 +148,33 @@ function findJobs(root) {
   return jobs
 }
 
-async function ensureBucket() {
-  const { data } = await sb.storage.listBuckets()
-  if (!data?.some(b => b.name === 'fab-drawings')) await sb.storage.createBucket('fab-drawings', { public: false })
-}
-
 const jobs = findJobs(cfg.yearRoot)
 console.log(`Found ${jobs.length} SS job(s) with Assembly Lists under ${cfg.yearRoot}`)
-if (!cfg.dryRun) await ensureBucket()
 const tok = supervisorToken()
 let processed = 0
 
 for (const j of jobs) {
   if (cfg.maxJobs && processed >= cfg.maxJobs) break
   console.log(`\n${j.jobNo} — ${j.name}  [${j.assemblies.length} list(s), ${j.bomFiles.length} BOM, ${j.drawings.length} drawing(s)]`)
-  if (!(await isReleased(j.jobNo))) { console.log('  – not released to factory yet — skipping'); continue }
+  if (!(await isReleased(j.jobNo, tok))) { console.log('  – not released to factory yet — skipping'); continue }
   if (cfg.dryRun) { processed++; continue }
 
-  const { data: job } = await sb.from('fab_jobs').upsert({
-    quote_number: j.jobNo, name: j.name, client: j.customer,
-    status: 'in_progress', compliance_mode: 'permissive', started_by: 'ss-ingest-bridge',
-  }, { onConflict: 'quote_number' }).select('id').single()
-  if (!job) { console.log('  ! could not create/find the job — skipping'); continue }
+  // Through the front door, which validates the number against the Hub's jobs
+  // table and refuses one it does not know (422). The bridge can no longer mint
+  // a fab_jobs row for a folder the Hub has never heard of, and a legacy HG or
+  // 7-digit reference is resolved to its canonical 8-digit number on the way in.
+  const createRes = await fetch(`${cfg.fabUrl}/api/fab/jobs`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${tok}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ quote_number: j.jobNo, name: j.name }),
+  })
+  const created = await createRes.json().catch(() => ({}))
+  if (!createRes.ok || !created?.job?.id) {
+    console.log(`  ! ${createRes.status} ${created?.error || 'could not create/find the job'} — skipping`)
+    continue
+  }
+  const job = created.job
+  if (created.matched_by === 'alias') console.log(`  · resolved ${j.jobNo} → ${job.quote_number} via the Hub's alias table`)
 
   for (const f of j.assemblies) {
     const name = f.split(/[\\/]/).pop()
@@ -177,8 +201,15 @@ for (const j of jobs) {
   let drew = 0
   for (const f of j.drawings) {
     const name = f.split(/[\\/]/).pop()
-    const { error } = await sb.storage.from('fab-drawings').upload(`${j.jobNo}/${name}`, readFileSync(f), { contentType: 'application/pdf', upsert: true })
-    if (error) console.log('  drawing ERR ' + name + ': ' + error.message); else drew++
+    const fd = new FormData()
+    fd.append('file', new File([readFileSync(f)], name, { type: 'application/pdf' }))
+    const res = await fetch(`${cfg.fabUrl}/api/fab/jobs/${job.id}/drawings`, {
+      method: 'POST', headers: { Authorization: `Bearer ${tok}` }, body: fd,
+    })
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({}))
+      console.log(`  drawing ERR ${name}: HTTP ${res.status} ${e.error || ''}`)
+    } else drew++
   }
   console.log(`  drawings: ${drew}/${j.drawings.length} uploaded`)
   processed++

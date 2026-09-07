@@ -8,7 +8,9 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: ['./vitest.setup.ts'],
-    include: ['src/**/*.test.ts'],
+    // scripts/ is included because the on-site bridge's pure logic lives there
+    // and a test that never runs is not a test. hytek-lws already does this.
+    include: ['src/**/*.test.ts', 'scripts/**/*.test.mjs'],
     coverage: { reporter: ['text'] },
   },
 })

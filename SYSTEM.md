@@ -37,6 +37,7 @@ tables:
                               # found ZERO references. One writer, no readers. (Lane 7)
   reads:
     - jobs
+    - job_aliases             # legacy HG / 7-digit → canonical number, for the ingest bridge
     - profiles
     - job_bom
   rpcs: []
@@ -87,8 +88,12 @@ exemptions:
 5. **How it gets a job.** `GET /api/fab/ready-queue` reads shared `jobs` with the
    service role, subtracts what is already in `fab_jobs`, then asks the Hub
    `GET /api/flow/job-state/_?quote_number=` per candidate. `POST /api/fab/jobs`
-   inserts a `fab_jobs` row from whatever quote number the body carries — it is
-   **not** validated against `jobs`. Only the Hub may mint a number.
+   **validates every number against SHARED `jobs`** and refuses an unknown one
+   with 422; a legacy `HG`/`HM`/7-digit reference is resolved through
+   `job_aliases` and the row is created under the CANONICAL number, never the
+   typed one (`src/lib/job-lookup.ts`). A test job is refused too — fab never
+   fabricates one. Only the Hub mints a number, and fab can no longer act as if
+   it does.
 6. **How it reports back.** Through the one door: `POST /api/flow/event` with
    four verbs — `fab_tonnes`, `fab_progress`, `fab_load_dispatched`, `fab_proof`
    (`src/lib/hub-events.ts`, payloads built in `src/lib/hub-event-builders.ts`).
@@ -103,11 +108,14 @@ exemptions:
 8. **Who calls it.** hytek-detailing's dispatch pages, through
    `GET /api/fab/bridge/dispatch` and `/api/fab/bridge/proof/[quote]` with
    `FAB_BRIDGE_TOKEN`; and the office-server ingest bridge, which mints its own
-   kiosk token with `KIOSK_SECRET` and posts assembly lists and BOMs.
+   kiosk token with `KIOSK_SECRET` and posts jobs, assembly lists, BOMs and
+   drawings. The bridge holds **no database credential** — it is a pure HTTP
+   client of this app.
 9. **Scheduled work.** No `vercel.json`, so zero Vercel crons. One office-server
-   Task Scheduler job runs `scripts/ss-ingest-bridge.mjs` against the Y: drive; it
-   derives job numbers from folder names with a legacy `HG\d{6,}` pattern while the
-   current mint is 8-digit numeric.
+   Task Scheduler job runs `scripts/ss-ingest-bridge.mjs` against the Y: drive.
+   It reads job numbers with `scripts/lib/job-ref.mjs` — 8-digit mint number
+   first, then a legacy `HG`/`HM` reference, and **skips a folder it cannot read
+   a number from**. It used to use the whole folder name as the job number.
 10. **The rule.** `npm run test:architecture` fails on anything this file does not
     declare. Do not widen it to make a change pass — close the door instead, or
     raise it with the lane that owns it.

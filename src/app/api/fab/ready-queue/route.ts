@@ -5,14 +5,16 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
-import { requireFabUser } from '@/lib/get-fab-user'
+// Kiosk tokens too: the ingest bridge asks this route whether a job has been
+// released before it starts fabricating it, so it talks to exactly one app.
+import { getUserCaller } from '@/lib/fab-auth'
 import { getJobStateByQuoteNumber, hubConfigured, HUB_NOT_CONFIGURED } from '@/lib/hub'
 import type { ReadyQueueItem } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest) {
-  const user = await requireFabUser(req)
+  const user = await getUserCaller(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   // No Hub credential = no answer, and the screen says so. It used to say
