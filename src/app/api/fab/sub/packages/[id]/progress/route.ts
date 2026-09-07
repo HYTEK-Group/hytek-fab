@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { getSubCaller, grantedPackage } from '@/lib/fab-sub-auth'
-import { computeAndUpsertProgress } from '@/lib/fab-progress'
+import { computeAndPublishProgress } from '@/lib/fab-progress'
 
 export const dynamic = 'force-dynamic'
 
@@ -48,6 +48,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       .eq('id', id).eq('status', 'sent')
   }
 
-  await computeAndUpsertProgress(pkg.fab_job_id)
+  await computeAndPublishProgress(pkg.fab_job_id)
   return NextResponse.json({ ok: true, update }, { status: 201 })
 }

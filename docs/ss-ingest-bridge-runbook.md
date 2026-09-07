@@ -27,17 +27,23 @@ Create `scripts/ss-ingest-bridge.env.cmd` (do NOT commit it):
 set SS_YEAR_ROOT=Y:\(17) 2026 HYTEK PROJECTS
 set FAB_URL=https://hytek-fab.vercel.app
 set KIOSK_SECRET=<same KIOSK_SECRET as the fab app>
-set SUPABASE_URL=https://gqtikzguvhukpujyxkez.supabase.co
-set SUPABASE_SERVICE_ROLE_KEY=<gqtikz service role key>
 rem --- optional: gate ingest on the Hub "Release to Factory" signal ---
-rem set RELEASES_ONLY=1
-rem set HUB_BASE=https://hub.hytekframing.com.au
-rem set HUB_INTERNAL_TOKEN=<Hub read token, or HUB_TOKEN_LWS>
+rem RELEASES_ONLY is ON by default. Set it to 0 only if you deliberately want
+rem every job with Tekla IFF reports loaded, released or not.
+rem set RELEASES_ONLY=0
 ```
 
-- Leave `RELEASES_ONLY` unset to load every job that has Tekla IFF reports present
+- **The bridge holds no database key.** `SUPABASE_URL` and
+  `SUPABASE_SERVICE_ROLE_KEY` are gone from this script and must be REMOVED from
+  the server's env file — a service-role key in a `.env` on a Windows box is a
+  copy of the whole database. `HUB_BASE` and `HUB_INTERNAL_TOKEN` are gone too:
+  the release check asks fab, so the bridge talks to exactly one app.
+- **It can no longer invent a job number.** A folder it cannot read a number from
+  is skipped and logged; `POST /api/fab/jobs` refuses a number the Hub has never
+  issued (422). A legacy `HG` folder is resolved to its canonical 8-digit number.
+- Set `RELEASES_ONLY=0` to load every job that has Tekla IFF reports present
   (current behaviour). Once the detailing "Release to Factory" pipeline is live,
-  set `RELEASES_ONLY=1` + `HUB_BASE` + a Hub token to load **only released** jobs.
+  the default (`RELEASES_ONLY` on) loads **only released** jobs.
 
 ## Wrapper
 
@@ -58,7 +64,7 @@ set DRY_RUN=1
 node scripts\ss-ingest-bridge.mjs
 ```
 
-`DRY_RUN=1` lists every job it WOULD load (and, if `RELEASES_ONLY=1`, which it
+`DRY_RUN=1` lists every job it WOULD load (and, with `RELEASES_ONLY` on, which it
 would skip as not-released) and changes nothing. Use `MAX_JOBS=3` to cap a real
 first run.
 
@@ -75,3 +81,10 @@ Check `scripts/ss-ingest-bridge.log` after the first scheduled run.
 - It never writes HubSpot, never writes another app's tables, and only ever
   *reads* Y:. It writes only `fab_*` rows, `job_bom`, and the `fab-drawings` bucket
   on gqtikz.
+
+## Where this is going
+
+Lane 12 turns this script into the `fab-ingest` plugin of the `hytek-bridge`
+Windows service. After the 07/09/2026 change it is already a pure HTTP client
+holding one secret, so that is a move rather than a rewrite. Until then it runs
+unchanged under the `SYSTEM.md` exemption (`until: 2026-10-31`).

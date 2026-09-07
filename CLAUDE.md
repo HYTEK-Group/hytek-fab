@@ -18,18 +18,44 @@ SQL Editor: https://supabase.com/dashboard/project/gqtikzguvhukpujyxkez/sql/new
 
 ## Hub-and-Spoke Architecture
 
-This app is a **spoke**. It talks ONLY to the Hub.
+This app is a **spoke**. It talks ONLY to the Hub — and since Lane 7 that is
+true, not aspirational. `SYSTEM.md` is the passport and `npm run test:architecture`
+enforces it; read the passport before you read this section.
 
-- **Read job state**: `GET https://hub.hytekframing.com.au/api/flow/job-state/{deal_id}`
-  - Auth: `Authorization: Bearer $HUB_INTERNAL_TOKEN` (server-side only)
-  - `ready_to_ship` from Hub = drawings cleared in detailing → mapped to `ss_drawings_issued`
-  - `materials_received` = when Purchasing is built Hub will relay it; defaults false
-- **Write tonnes to Hub feed**: `flow_fab_entries` table in gqtikz — append-only, one total per week
-  - DO NOT add per-job rows to this table — Hub's `latestPerWeek()` reads the last row only
-  - Per-job breakdown goes in `fab_weekly_entries`; API writes summed total to `flow_fab_entries` last
+**Every credential fab holds is scoped.**
 
-**NEVER READ**: `detailing_handoffs`, `purchasing` tables, or any other spoke's tables.
-No app-to-app reads. Hub only.
+- **Its Hub token is `HUB_TOKEN_FAB`.** Not `HUB_INTERNAL_TOKEN` — an unscoped
+  token that can trigger any other spoke's events has no business in a
+  department app. When it is unset the Hub is reported UNREACHABLE; there is no
+  permissive stub returning a made-up job-state (`src/lib/hub.ts`).
+- **Its database credential is `SUPABASE_ROLE_KEY`** for role `app_fab`, scoped
+  to the tables in the passport (`src/lib/supabase-admin.ts`). The service key
+  is a warned-about fallback until Lane 13 mints the role.
+
+**How fab TELLS the Hub things — four verbs, one door.**
+`POST {HUB}/api/flow/event` with `HUB_TOKEN_FAB`: `fab_tonnes`, `fab_progress`,
+`fab_load_dispatched`, `fab_proof` (`src/lib/hub-events.ts`, payloads built in
+`src/lib/hub-event-builders.ts`). **Do NOT write `flow_fab_entries` or
+`flow_fab_progress`** — they are the Hub's tables, the Hub writes them from
+these events, and they are no longer in `tables.owns`, so re-adding a write
+fails the architecture check. A send never fails a floor action; a genuine
+failure lands in `fab_events` as `hub_send_failed`.
+
+**How fab HEARS things — one door in, and fab never polls.**
+The Hub's outbox pushes to `POST /api/fab/ingest` (`x-fab-import-secret`):
+`job.released` (stream `SS`), `materials.received`, `job.revised`, and the five
+`rework.*` / `variation.*` verbs that create and close `fab_tasks`. Releases and
+materials land in `fab_ready_queue`; `GET /api/fab/ready-queue` reads that and
+makes **zero Hub calls**. The remaining Hub read is `GET /api/flow/job-state` on
+the job page, where one job is in view.
+
+**Only the Hub issues job numbers.** `POST /api/fab/jobs` validates every number
+against SHARED `jobs` and refuses an unknown one with 422; a legacy `HG`/`HM`/
+7-digit reference resolves through `job_aliases` and the row is created under
+the CANONICAL number (`src/lib/job-lookup.ts`).
+
+**NEVER READ**: `detailing_handoffs`, `purchasing` tables, or any other spoke's
+tables. No app-to-app reads. Hub only.
 
 ## Tech Stack
 - Next.js (App Router) + Supabase (gqtikz)

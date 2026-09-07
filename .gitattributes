@@ -1,3 +1,17 @@
+# LINE ENDINGS ARE NOT COSMETIC HERE.
+#
+# Proved in hytek-lws on 07/09/2026, both directions: a `.mjs` module with CRLF
+# makes vitest FAIL TO LOAD IT — "SyntaxError: Invalid or unexpected token" —
+# while `node --check` and esbuild parse the identical bytes without complaint.
+# Worse, vitest blames the file that IMPORTED it, so the error points at a
+# comment line in some unrelated test and the real cause is invisible.
+#
+# CI runs on Linux, checks out LF, and is green. So the failure appears only on
+# a developer's Windows machine, after a fresh checkout, on code nobody touched.
+# That is the worst shape a bug can have: it teaches people that a red local
+# suite means nothing.
+#
+# .cmd and .ps1 stay CRLF on purpose — PowerShell and cmd want it.
 *               text=auto eol=lf
 *.js            text eol=lf
 *.mjs           text eol=lf
@@ -6,6 +20,7 @@
 *.json          text eol=lf
 *.md            text eol=lf
 *.yml           text eol=lf
+*.sql           text eol=lf
 *.html          text eol=lf
 *.cmd           text eol=crlf
 *.ps1           text eol=crlf

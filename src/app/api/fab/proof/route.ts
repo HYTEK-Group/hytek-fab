@@ -8,6 +8,8 @@ import { randomUUID } from 'crypto'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { getUserCaller } from '@/lib/fab-auth'
 import { imageSha256, duplicatePhotoCheck, isUniqueViolation } from '@/lib/fab-photo-dedupe'
+import { sendFabEventLogged } from '@/lib/hub-events'
+import { buildProofEvent } from '@/lib/hub-event-builders'
 import type { ProofStage } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
@@ -33,7 +35,7 @@ export async function POST(req: NextRequest) {
   const caption = (form?.get('caption') as string) || null
 
   const admin = getSupabaseAdmin()
-  const { data: job } = await admin.from('fab_jobs').select('id').eq('id', jobId).single()
+  const { data: job } = await admin.from('fab_jobs').select('id, quote_number, hubspot_deal_id').eq('id', jobId).single()
   if (!job) return NextResponse.json({ error: 'Job not found' }, { status: 404 })
 
   // any referenced mark/package/load must belong to this job (no cross-job attribution)
@@ -71,6 +73,19 @@ export async function POST(req: NextRequest) {
     }
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
+
+  // Tell the Hub a piece of evidence exists. The PHOTO never leaves fab's
+  // `fab-proof` bucket — the event carries the storage path so the Hub can sign
+  // a URL later if it ever needs to show one. Traceability doctrine: the photo
+  // IS the proof, and proof that only one app can see is not traceability.
+  await sendFabEventLogged(admin, buildProofEvent({
+    quoteNumber: job.quote_number,
+    dealId: job.hubspot_deal_id,
+    stage, photoId: row.id, path,
+    takenAt: row.taken_at,
+    markId, packageId, loadId,
+    takenBy: caller.name,
+  }), jobId, caller.name)
 
   const { data: signed } = await admin.storage.from('fab-proof').createSignedUrl(path, 3600)
   return NextResponse.json({ ok: true, id: row.id, stage: row.stage, taken_at: row.taken_at, url: signed?.signedUrl ?? null })

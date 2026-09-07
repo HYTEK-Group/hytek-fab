@@ -4,12 +4,15 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
-import { requireFabUser } from '@/lib/get-fab-user'
+// getUserCaller accepts a kiosk token as well as a Supabase JWT — the
+// office-server ingest bridge uploads shop drawings through this route now
+// instead of writing the storage bucket with a service-role key.
+import { getUserCaller } from '@/lib/fab-auth'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const user = await requireFabUser(req)
+  const user = await getUserCaller(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { id } = await params
 

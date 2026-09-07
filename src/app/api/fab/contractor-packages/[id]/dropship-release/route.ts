@@ -11,7 +11,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { getSupervisorCaller } from '@/lib/fab-auth'
 import { canReleaseDropShip } from '@/lib/fab-sub-release'
-import { computeAndUpsertProgress } from '@/lib/fab-progress'
+import { computeAndPublishProgress } from '@/lib/fab-progress'
 import type { CcLevel, ComplianceMode, DeliveryMode } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
@@ -101,7 +101,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     entered_by: caller.name,
   })
 
-  await computeAndUpsertProgress(pkg.fab_job_id)
+  await computeAndPublishProgress(pkg.fab_job_id)
   return NextResponse.json({
     ok: true,
     released_at: now,

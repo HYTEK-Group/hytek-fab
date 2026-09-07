@@ -6,7 +6,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { requireFabSupervisor } from '@/lib/get-fab-user'
 import { getUserCaller } from '@/lib/fab-auth'
-import { computeAndUpsertProgress } from '@/lib/fab-progress'
+import { computeAndPublishProgress } from '@/lib/fab-progress'
 import { logException } from '@/lib/fab-events-log'
 import { isBackwardStatus } from '@/lib/fab-gatekeeper'
 import type { MarkStatus } from '@/lib/types'
@@ -61,7 +61,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  await computeAndUpsertProgress(id)
+  await computeAndPublishProgress(id)
   return NextResponse.json({ mark: data }, { status: 201 })
 }
 
@@ -122,6 +122,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     })
   }
 
-  await computeAndUpsertProgress(id)
+  await computeAndPublishProgress(id)
   return NextResponse.json({ marks: data })
 }
