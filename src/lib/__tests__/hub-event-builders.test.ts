@@ -25,7 +25,7 @@ const ROW: FabProgressRow = {
     {
       package_id: 'pkg-1',
       package_type: 'treatment',
-      treatment_type: 'galvanising',
+      treatment_type: 'hdg',
       contractor_name: 'Transglas',
       scope_note: null,
       total_marks: 3,
