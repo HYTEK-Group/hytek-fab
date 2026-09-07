@@ -51,10 +51,12 @@ hosts:
     - hytek-fab.vercel.app
     - hytek-fab-staging.vercel.app   # scripts/backfill-ready-queue.mjs runs against a deploy of this app
     - api.supabase.com         # scripts/migrate.mjs (Management API) — developer machines only
+    - "*.ingest.sentry.io"   # Sentry error reporting — Lane 0 CP3 wired it; the app talks to Sentry only when NEXT_PUBLIC_SENTRY_DSN is set
 env:
   privileged:
     - SUPABASE_ROLE_KEY           # scoped to the grants below — this is the target state
     - SUPABASE_SERVICE_ROLE_KEY   # bypasses every grant — Lane 13 deletes it from Vercel and from here
+    - SENTRY_AUTH_TOKEN   # source-map upload at BUILD time only (next.config.ts); never read at runtime
 crons: []
 events:
   out:
