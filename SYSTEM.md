@@ -43,13 +43,18 @@ tables:
 hosts:
   approved:
     - hub.hytekframing.com.au
+    - hytek-hub-staging.vercel.app
     - hytek-fab.vercel.app
 env:
   privileged:
     - SUPABASE_SERVICE_ROLE_KEY
 crons: []
 events:
-  out: []
+  out:
+    - fab_tonnes
+    - fab_progress
+    - fab_load_dispatched
+    - fab_proof
   in: []
 exemptions:
   - { path: scripts/ss-ingest-bridge.mjs, reason: "on-site script; Lane 12 moves it to hytek-bridge", until: 2026-10-31 }
@@ -78,11 +83,14 @@ exemptions:
    `GET /api/flow/job-state/_?quote_number=` per candidate. `POST /api/fab/jobs`
    inserts a `fab_jobs` row from whatever quote number the body carries — it is
    **not** validated against `jobs`. Only the Hub may mint a number.
-6. **How it reports back.** It does not. There is no `POST /api/flow/event`
-   anywhere in this repo; the two `flow_fab_*` writes are the report, and they go
-   straight into the Hub's tables.
-7. **Who it calls.** The Hub only (`src/lib/hub.ts`, `HUB_INTERNAL_TOKEN` — the
-   unscoped Hub-wide token, not a fab-scoped one). No HubSpot, Xero, Asana, Slack,
+6. **How it reports back.** Through the one door: `POST /api/flow/event` with
+   four verbs — `fab_tonnes`, `fab_progress`, `fab_load_dispatched`, `fab_proof`
+   (`src/lib/hub-events.ts`, payloads built in `src/lib/hub-event-builders.ts`).
+   The two `flow_fab_*` direct writes are still here at CP1 and go at CP2.
+7. **Who it calls.** The Hub only (`src/lib/hub.ts`), with **`HUB_TOKEN_FAB`** —
+   a fab-scoped token, not the unscoped `HUB_INTERNAL_TOKEN` it used to hold.
+   When that token is unset the Hub is reported UNREACHABLE; there is no
+   permissive stub returning a made-up job-state. No HubSpot, Xero, Asana, Slack,
    Resend, Sentry or invoicing calls.
 8. **Who calls it.** hytek-detailing's dispatch pages, through
    `GET /api/fab/bridge/dispatch` and `/api/fab/bridge/proof/[quote]` with

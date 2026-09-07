@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { requireFabUser } from '@/lib/get-fab-user'
-import { getJobState, getJobStateByQuoteNumber } from '@/lib/hub'
+import { getJobStateByQuoteNumber, hubConfigured, HUB_NOT_CONFIGURED } from '@/lib/hub'
 import type { ReadyQueueItem } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
@@ -14,6 +14,13 @@ export const dynamic = 'force-dynamic'
 export async function GET(req: NextRequest) {
   const user = await requireFabUser(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  // No Hub credential = no answer, and the screen says so. It used to say
+  // "No jobs ready" — indistinguishable from a real empty queue, because
+  // src/lib/hub.ts returned a fabricated job-state when the token was unset.
+  if (!hubConfigured()) {
+    return NextResponse.json({ items: [], note: HUB_NOT_CONFIGURED })
+  }
 
   const admin = getSupabaseAdmin()
 
@@ -40,9 +47,11 @@ export async function GET(req: NextRequest) {
 
   // Check Hub for each candidate (in batches of 10 to avoid overwhelming Hub)
   const results: ReadyQueueItem[] = []
+  let hubFailures = 0
 
   for (const job of candidates.slice(0, 50)) {
     const hubRes = await getJobStateByQuoteNumber(job.quote_number)
+    if (!hubRes.ok) hubFailures++
     const hubState = hubRes.ok ? hubRes.state : null
 
     // The real manufacturing trigger is the deliberate "Release to Factory"
@@ -74,5 +83,10 @@ export async function GET(req: NextRequest) {
   // Sort: fully ready first, then drawings-only
   results.sort((a, b) => Number(b.ready) - Number(a.ready))
 
-  return NextResponse.json({ items: results })
+  // An unanswered Hub is reported, not hidden behind a short list.
+  const note = hubFailures > 0
+    ? `Hub did not answer for ${hubFailures} job${hubFailures === 1 ? '' : 's'} — this list is incomplete`
+    : undefined
+
+  return NextResponse.json({ items: results, ...(note ? { note } : {}) })
 }
