@@ -403,6 +403,35 @@ export async function main(argv, env, io = {}) {
     await query(LEDGER_DDL)
     return true
   }
+  /**
+   * THE CARRY-OVER TRAP, MADE VISIBLE.
+   *
+   * LEDGER_DDL renames a pre-Lane-2 `schema_migrations` to
+   * `schema_migrations_pre_lane2` and creates the new one EMPTY. So the first
+   * time the runner meets a database that already had migrations, every one of
+   * them reads as PENDING — and `up` would cheerfully run them all again.
+   *
+   * On staging that is a mess. On production, at cutover, re-running applied
+   * migrations is the kind of thing this whole programme exists to prevent, and
+   * `status` said nothing about it: it printed a long PENDING list and never
+   * mentioned that the real history was sitting in a table one rename away.
+   *
+   * `mark-applied <file> --why "…"` is the carry-over tool, one file at a time.
+   */
+  const carriedOver = async () => {
+    // TWO queries, deliberately. Postgres resolves table names at PARSE time, so
+    // `select count(*) from public.schema_migrations_pre_lane2` where the table
+    // does not exist is a 42P01 no matter what guard you put in the WHERE or in
+    // a CASE around it — the subquery still has to parse. Ask whether it exists
+    // first, then count. This runner already shipped one piece of SQL that was
+    // green in fixtures and failed on every real database; not twice.
+    const there = rows(await query(
+      `select to_regclass('public.schema_migrations_pre_lane2') is not null as ok`))[0]?.ok === true
+    if (!there) return { present: false, count: 0 }
+    const n = Number(rows(await query(
+      `select count(*)::int as n from public.schema_migrations_pre_lane2`))[0]?.n ?? 0)
+    return { present: n > 0, count: n }
+  }
   const ledgerRows = () => query(`select name, checksum, applied_at, applied_by, source, note from public.schema_migrations where repo = ${quote(REPO)} order by name`).then(rows)
 
   // fingerprint --------------------------------------------------------------
@@ -473,7 +502,8 @@ export async function main(argv, env, io = {}) {
       const live = await fingerprint()
       shape = last ? { last, live, ...diffObjects(last.objects, live.objects) } : { last: null, live, added: [], removed: [], changed: [] }
     }
-    return { files, present, ...c, shape }
+    const carry = present ? await carriedOver() : { present: false, count: 0 }
+    return { files, present, ...c, shape, carry }
   }
 
   // commands ------------------------------------------------------------------
@@ -483,6 +513,14 @@ export async function main(argv, env, io = {}) {
     say(`\n  ${REPO} → ${alias} (${ref})${isProd ? '  [PRODUCTION — read only]' : ''}`)
     if (!s.present) { say(`  no schema_migrations on this project yet. Lane 13 creates it at cutover.\n`); return s }
     say(`  ${s.applied.length} applied · ${s.pending.length} pending · ${s.edited.length} edited-after-applying · ${s.orphans.length} applied-but-not-in-git\n`)
+    if (s.carry?.present && s.pending.length) {
+      say(`  ⚠ ${s.carry.count} row(s) of REAL HISTORY are in public.schema_migrations_pre_lane2.`)
+      say(`    This database had migrations before the runner existed; the ledger was renamed and`)
+      say(`    started empty, so the list below OVERSTATES what is actually outstanding. Some of`)
+      say(`    those files have already run. Carry each one over before you trust this:`)
+      say(`      node ${DIR.split('/')[0]}/migrate.mjs mark-applied <file> --why "ran <date>; reconciled by Lane 2"`)
+      say('')
+    }
     for (const f of s.pending) say(`  PENDING   ${DIR}/${f.name}`)
     for (const f of s.edited) say(`  EDITED    ${DIR}/${f.name}  ← already applied ${String(f.row.applied_at).slice(0, 10)}; the file has changed since`)
     for (const r of s.orphans) say(`  ORPHAN    ${r.name}  ← recorded applied ${String(r.applied_at).slice(0, 10)}, no such file in git`)
@@ -531,6 +569,17 @@ export async function main(argv, env, io = {}) {
     if (s.orphans.length) die(`${s.orphans.length} migration(s) are recorded applied with no file in git:\n` +
       s.orphans.map(r => `      ${r.name} (applied ${String(r.applied_at).slice(0, 10)} by ${r.applied_by})`).join('\n') +
       `\n    A live database change with no code is exactly the 11/08 failure. Restore the file, or delete the ledger row deliberately and say which in the commit.`)
+
+    if (s.carry?.present && s.pending.length) die(
+      `${s.carry.count} row(s) of history are in public.schema_migrations_pre_lane2 and ${s.pending.length} migration(s) read as pending.
+` +
+      `    The ledger was renamed and recreated empty, so some of those have ALREADY RUN on this database.
+` +
+      `    Running them again is exactly the damage this runner exists to prevent — on production, at cutover, it is the whole risk.
+` +
+      `    Carry each one over first:  mark-applied <file> --why "ran <date>; reconciled by Lane 2"
+` +
+      `    Then re-run status and check the pending list is the truth before up.`)
 
     let todo = s.pending
     if (only) {

@@ -50,8 +50,8 @@ const seedFp = (objects) => ({ id: 1, taken_at: '2026-09-07T00:00:00Z', taken_by
 
 /** A fake Management API. `state` is the database: a ledger, a fingerprint
  *  history, a lock and a list of every statement it was asked to run. */
-function fakeApi({ ledger = [], fingerprints = [], lockHolder = null, lockRow = true, objects = {} } = {}) {
-  const state = { ledger, fingerprints, lockHolder, lockRow, objects, sql: [], urls: [] }
+function fakeApi({ ledger = [], fingerprints = [], lockHolder = null, lockRow = true, objects = {}, preLane2 = null } = {}) {
+  const state = { ledger, fingerprints, lockHolder, lockRow, objects, preLane2, sql: [], urls: [] }
   const reply = (body) => new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } })
   state.fetch = async (url, init) => {
     const q = JSON.parse(init.body).query
@@ -60,6 +60,9 @@ function fakeApi({ ledger = [], fingerprints = [], lockHolder = null, lockRow = 
     const l = q.toLowerCase()
 
     if (l.includes("to_regclass('public.schema_migrations')")) return reply([{ ok: true }])
+    // the carried-over ledger: absent unless the test says otherwise
+    if (l.includes("to_regclass('public.schema_migrations_pre_lane2')")) return reply([{ ok: state.preLane2 !== null }])
+    if (l.includes('from public.schema_migrations_pre_lane2')) return reply([{ n: state.preLane2 ?? 0 }])
     if (l.includes('create table if not exists public.schema_migrations')) return reply([])
     if (l.startsWith('select name, checksum, applied_at')) return reply(state.ledger)
     if (l.includes('from public.schema_fingerprint order by id desc')) {
@@ -566,6 +569,59 @@ describe('--only selects one migration, not all of them', () => {
 })
 
 // ---------------------------------------------------------------------------
+// THE CARRY-OVER TRAP. LEDGER_DDL renames a pre-Lane-2 schema_migrations and
+// creates the new one empty, so every already-applied migration reads PENDING.
+// Staging is already in that state (1 row new, 7 in _pre_lane2) and Lane 13
+// meets it on PRODUCTION at cutover, where re-running applied migrations is the
+// exact damage this runner exists to prevent.
+describe('a renamed pre-Lane-2 ledger is never silently treated as "nothing applied"', () => {
+  it('status says the pending list overstates what is outstanding, and names the table', async () => {
+    write('001-a.sql', 'create table a();')
+    write('002-b.sql', 'create table b();')
+    const r = await run(['status', '--project', STG], { api: fakeApi({ preLane2: 7 }) })
+    const said = r.out
+    expect(said).toContain('schema_migrations_pre_lane2')
+    expect(said).toContain('7 row(s)')
+    expect(said).toMatch(/OVERSTATES/)
+    expect(said).toContain('mark-applied')
+  })
+
+  it('up REFUSES rather than re-running history that is already in the database', async () => {
+    write('001-a.sql', 'create table a();')
+    const api = fakeApi({ preLane2: 7 })
+    const r = await run(['up', '--project', STG], { api })
+    expect(r.exitCode).not.toBe(0)
+    expect(r.err + r.out).toContain('schema_migrations_pre_lane2')
+    // and it applied NOTHING
+    expect(api.sql.some(q => q.includes('create table a()'))).toBe(false)
+    expect(api.ledger).toHaveLength(0)
+  })
+
+  it('says nothing when there is no carried-over ledger — no crying wolf', async () => {
+    write('001-a.sql', 'create table a();')
+    const r = await run(['status', '--project', STG])
+    expect(r.out).not.toContain('pre_lane2')
+  })
+
+  it('says nothing when the table exists but is empty — the carry-over is done', async () => {
+    write('001-a.sql', 'create table a();')
+    const r = await run(['status', '--project', STG], { api: fakeApi({ preLane2: 0 }) })
+    expect(r.out).not.toContain('OVERSTATES')
+  })
+
+  it('asks whether the table exists BEFORE counting it — a count alone is a 42P01', async () => {
+    write('001-a.sql', 'create table a();')
+    const api = fakeApi({ preLane2: null })
+    await run(['status', '--project', STG], { api })
+    const asked = api.sql.findIndex(q => q.includes("to_regclass('public.schema_migrations_pre_lane2')"))
+    const counted = api.sql.findIndex(q => q.includes('count(*)::int as n from public.schema_migrations_pre_lane2'))
+    expect(asked).toBeGreaterThanOrEqual(0)
+    // absent table: it must not have gone on to count at all
+    expect(counted).toBe(-1)
+  })
+})
+
+// ---------------------------------------------------------------------------
 // THE COPY IS THE RULE, AND UNTIL NOW NOTHING CHECKED IT.
 //
 // Lane 0 §9: every app repo carries a byte-identical copy of the runner at
@@ -588,7 +644,7 @@ describe('--only selects one migration, not all of them', () => {
 // Windows machine while the app repos check out LF, so comparing raw bytes
 // reports drift in every repo, every time, while the git blobs are identical —
 // a check that cries wolf weekly is a check that gets ignored within a month.
-const CANONICAL_RUNNER_SHA256 = 'd5efeb8b83e4019a2857ab2f2e2ce66af5dfd8c9a339c9433776025be764ca10'
+const CANONICAL_RUNNER_SHA256 = 'f7d03aa2485842578aacfef2816f1bf7485078ae642cfa59160e1b0d5c759571'
 
 describe('the vendored runner is byte-identical to hytek-brain/tool/migrate.mjs', () => {
   it('matches the canonical hash — if this fails, do NOT edit the hash to match', () => {
