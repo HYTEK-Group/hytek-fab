@@ -3,8 +3,8 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
-import { requireFabSupervisor } from '@/lib/get-fab-user'
-import { getUserCaller } from '@/lib/fab-auth'
+import { resolveJobRef } from '@/lib/job-lookup'
+import { getSupervisorCaller, getUserCaller } from '@/lib/fab-auth'
 import { tonnageSummary } from '@/lib/fab-tonnage'
 import { jobActionSummary } from '@/lib/fab-action-centre'
 
@@ -66,7 +66,13 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const user = await requireFabSupervisor(req)
+  // getSupervisorCaller, NOT requireFabSupervisor: the latter accepts only a
+  // Supabase JWT, and the office-server ingest bridge authenticates with a kiosk
+  // token like every other route it calls (/import-assembly, /import-bom). With
+  // requireFabSupervisor here the bridge could not create a job at all — it got
+  // 403 and fell back to writing fab_jobs with the service-role key, which is
+  // exactly the door this checkpoint closes.
+  const user = await getSupervisorCaller(req)
   if (!user) return NextResponse.json({ error: 'Supervisor or admin required' }, { status: 403 })
 
   const body = (await req.json()) as {
@@ -78,37 +84,63 @@ export async function POST(req: NextRequest) {
     cc_level?: string | null
   }
 
-  if (!body.quote_number?.trim() || !body.name?.trim()) {
-    return NextResponse.json({ error: 'quote_number and name required' }, { status: 400 })
+  if (!body.quote_number?.trim()) {
+    return NextResponse.json({ error: 'quote_number required' }, { status: 400 })
   }
 
   const admin = getSupabaseAdmin()
 
-  // Idempotent: if already exists, return existing
+  // ONLY THE HUB ISSUES JOB NUMBERS. This route used to insert a fab_jobs row
+  // from whatever the body carried — so a typo, or the ingest bridge handing it
+  // a whole folder name, created a job that existed in exactly one database and
+  // reconciled with nothing. An unknown number is refused; a legacy HG or
+  // 7-digit reference is resolved to the canonical number first.
+  const resolved = await resolveJobRef(admin, body.quote_number)
+  if (!resolved.ok) {
+    return NextResponse.json(
+      {
+        error: resolved.reason === 'test'
+          ? `${body.quote_number.trim()} is a test job — fab never fabricates one`
+          : `Unknown job number "${body.quote_number.trim()}" — jobs are created in the Hub first`,
+        reason: resolved.reason,
+      },
+      { status: 422 },
+    )
+  }
+  const shared = resolved.job
+
+  // Idempotent: if already exists, return existing. Keyed on the CANONICAL
+  // number, so starting the same job twice under two of its names is one job.
   const { data: existing } = await admin
     .from('fab_jobs')
     .select('*')
-    .eq('quote_number', body.quote_number.trim())
+    .eq('quote_number', shared.quote_number)
     .maybeSingle()
 
-  if (existing) return NextResponse.json({ job: existing, created: false })
+  if (existing) return NextResponse.json({ job: existing, created: false, matched_by: resolved.matchedBy })
 
   const { data, error } = await admin
     .from('fab_jobs')
     .insert({
-      quote_number: body.quote_number.trim(),
-      hubspot_deal_id: body.hubspot_deal_id ?? null,
-      name: body.name.trim(),
-      client: body.client ?? null,
+      // The Hub's values, never the caller's. The name typed into Start
+      // Fabrication is ignored: the Hub is the source of a job's name, and two
+      // apps disagreeing about what a job is called is how a reconciliation
+      // report becomes unreadable.
+      quote_number: shared.quote_number,
+      hubspot_deal_id: shared.hubspot_deal_id,
+      name: shared.name ?? body.name?.trim() ?? shared.quote_number,
+      client: shared.client,
       on_site_date: body.on_site_date ?? null,
       cc_level: body.cc_level ?? null,
       status: 'in_progress',
+      // permissive by decision 2026-09; strict mode is a Scott switch, not a
+      // code default (07-fab.md §7).
       compliance_mode: 'permissive',
-      started_by: user.email ?? user.fullName ?? user.id,
+      started_by: user.name,
     })
     .select()
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ job: data, created: true }, { status: 201 })
+  return NextResponse.json({ job: data, created: true, matched_by: resolved.matchedBy }, { status: 201 })
 }
