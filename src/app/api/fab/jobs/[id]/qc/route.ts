@@ -5,7 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { getSupervisorCaller } from '@/lib/fab-auth'
-import { computeAndUpsertProgress } from '@/lib/fab-progress'
+import { computeAndPublishProgress } from '@/lib/fab-progress'
 import type { ReworkType } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
@@ -70,6 +70,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { error: evErr } = await admin.from('fab_qc_events').insert(events)
   if (evErr) return NextResponse.json({ error: evErr.message }, { status: 500 })
 
-  await computeAndUpsertProgress(id)
+  await computeAndPublishProgress(id)
   return NextResponse.json({ ok: true, count: marks.length })
 }

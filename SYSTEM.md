@@ -32,9 +32,9 @@ tables:
     - fab_tasks
     - fab_time_entries
     - fab_weekly_entries
-    - flow_fab_entries        # side door — Hub table written direct; Lane 7 closes
-    - flow_fab_progress       # side door — Hub table written direct; Lane 7 closes
-    - job_bom                 # side door — purchasing reads it; ownership settled by Lane 7
+    - job_bom                 # fab's own table. The old "purchasing reads it" note was WRONG:
+                              # grep of hub/purchasing/detailing/install/lws on 07/09/2026
+                              # found ZERO references. One writer, no readers. (Lane 7)
   reads:
     - jobs
     - profiles
@@ -75,9 +75,15 @@ exemptions:
    events, the append-only `fab_events` exception log, PINs and their attempt
    counters, and the subcontractor account/grant/attempt tables.
 4. **What it borrows.** It reads the shared `jobs` table and `profiles` directly,
-   and it writes two Hub-owned tables — `flow_fab_entries` (one weekly tonnes
-   total) and `flow_fab_progress` (recomputed after any mark or package change).
-   `job_bom` is written here by the BOM import and read by purchasing.
+   and nothing else. It used to WRITE two Hub-owned tables — `flow_fab_entries`
+   (one weekly tonnes total) and `flow_fab_progress` (recomputed after any mark
+   or package change). Both are gone: the Hub writes them from fab's events, and
+   because they are no longer in `tables.owns` above, re-adding either write
+   fails `npm run test:architecture`. `job_bom` is fab's own table (the
+   BOM import writes it) and nothing else in the suite touches it — the earlier
+   "side door — purchasing reads it" annotation was wrong; a grep of hytek-hub,
+   hytek-purchasing, hytek-detailing, hytek-install and hytek-lws on 07/09/2026
+   found zero references.
 5. **How it gets a job.** `GET /api/fab/ready-queue` reads shared `jobs` with the
    service role, subtracts what is already in `fab_jobs`, then asks the Hub
    `GET /api/flow/job-state/_?quote_number=` per candidate. `POST /api/fab/jobs`
@@ -86,7 +92,9 @@ exemptions:
 6. **How it reports back.** Through the one door: `POST /api/flow/event` with
    four verbs — `fab_tonnes`, `fab_progress`, `fab_load_dispatched`, `fab_proof`
    (`src/lib/hub-events.ts`, payloads built in `src/lib/hub-event-builders.ts`).
-   The two `flow_fab_*` direct writes are still here at CP1 and go at CP2.
+   There are no direct writes into Hub tables left. A send never fails a floor
+   action; a genuine failure lands in `fab_events` as `hub_send_failed` and
+   shows on the Exceptions screen.
 7. **Who it calls.** The Hub only (`src/lib/hub.ts`), with **`HUB_TOKEN_FAB`** —
    a fab-scoped token, not the unscoped `HUB_INTERNAL_TOKEN` it used to hold.
    When that token is unset the Hub is reported UNREACHABLE; there is no

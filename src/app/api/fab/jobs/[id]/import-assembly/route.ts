@@ -9,7 +9,7 @@ import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { getSupervisorCaller } from '@/lib/fab-auth'
 import { parseAssemblyRows, type Row } from '@/lib/tekla-assembly'
 import { diffMarks, needsReview, buildMarkUpserts, MARK_UPSERT_OPTIONS, type ExistingMark } from '@/lib/fab-import'
-import { computeAndUpsertProgress } from '@/lib/fab-progress'
+import { computeAndPublishProgress } from '@/lib/fab-progress'
 import { stableSource } from '@/lib/source-key'
 
 export const dynamic = 'force-dynamic'
@@ -94,7 +94,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     note: review ? `${protectedChanges.length} protected change(s), ${diff.removed.length} removed — review with detailing` : null,
   })
 
-  await computeAndUpsertProgress(id)
+  await computeAndPublishProgress(id)
 
   return NextResponse.json({
     ok: true,
