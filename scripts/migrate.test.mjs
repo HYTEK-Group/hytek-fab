@@ -10,6 +10,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import crypto from 'node:crypto'
+import { fileURLToPath } from 'node:url'
 import {
   main, sha, quote, readPassport, resolveTarget, discoverIn, diffObjects,
   classify, transactional, PROD_REFS, SHARED_REFS, ExitSignal, LEDGER_DDL, isUntransactioned,
@@ -561,5 +562,46 @@ describe('--only selects one migration, not all of them', () => {
     const r = await run(['up', '--only', '002'])
     expect(r.out).toMatch(/applied 002-b\.sql/)
     expect(r.out).not.toMatch(/applied 001-a\.sql/)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// THE COPY IS THE RULE, AND UNTIL NOW NOTHING CHECKED IT.
+//
+// Lane 0 §9: every app repo carries a byte-identical copy of the runner at
+// scripts/migrate.mjs, and you never edit an app copy — you change
+// hytek-brain/tool/migrate.mjs and re-copy.
+//
+// That was a sentence in a document, so it drifted, and it drifted FAST. Within
+// two days of the rule being written, hytek-lws, hytek-invoicing and hytek-fab
+// had each independently fixed the same `pg_sequences.data_type` cast in their
+// OWN vendored copy. The suite was running two different runners and the
+// canonical one was the broken one — the file every other repo was told to copy
+// from had never been run against a real database.
+//
+// So this is the rule enforced by code instead. Change the runner and this test
+// goes red until you update the hash in the SAME canonical pair and re-vendor
+// both files together. Edit a copy locally and it goes red immediately, which
+// is what would have caught all three of those repos at the pull request.
+//
+// Line endings are normalised before hashing. hytek-brain checks out CRLF on a
+// Windows machine while the app repos check out LF, so comparing raw bytes
+// reports drift in every repo, every time, while the git blobs are identical —
+// a check that cries wolf weekly is a check that gets ignored within a month.
+const CANONICAL_RUNNER_SHA256 = 'd5efeb8b83e4019a2857ab2f2e2ce66af5dfd8c9a339c9433776025be764ca10'
+
+describe('the vendored runner is byte-identical to hytek-brain/tool/migrate.mjs', () => {
+  it('matches the canonical hash — if this fails, do NOT edit the hash to match', () => {
+    const runner = path.join(path.dirname(fileURLToPath(import.meta.url)), 'migrate.mjs')
+    const normalised = fs.readFileSync(runner, 'utf8').replace(/\r\n/g, '\n')
+    const actual = crypto.createHash('sha256').update(normalised).digest('hex')
+    expect(
+      actual,
+      'This copy of migrate.mjs has drifted from hytek-brain/tool/migrate.mjs. ' +
+        'Do not fix it here and do not update this hash: change the canonical file, ' +
+        're-copy it and this test to every repo, and log it (Lane 0 §9). ' +
+        'Three repos each fixed the same bug in their own copy and the canonical ' +
+        'one stayed broken — this test exists so that cannot happen quietly again.',
+    ).toBe(CANONICAL_RUNNER_SHA256)
   })
 })
