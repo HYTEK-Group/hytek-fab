@@ -48,6 +48,7 @@ hosts:
     - hub.hytekframing.com.au
     - hytek-hub-staging.vercel.app
     - hytek-fab.vercel.app
+    - hytek-fab-staging.vercel.app   # scripts/backfill-ready-queue.mjs runs against a deploy of this app
     - api.supabase.com         # scripts/migrate.mjs (Management API) — developer machines only
 env:
   privileged:
