@@ -11,6 +11,7 @@ export default function ReadyQueuePage() {
   const { user, loading } = useAuth()
   const router = useRouter()
   const [items, setItems] = useState<ReadyQueueItem[]>([])
+  const [note, setNote] = useState<string | null>(null)
   const [fetching, setFetching] = useState(true)
   const [starting, setStarting] = useState<string | null>(null)
 
@@ -21,7 +22,13 @@ export default function ReadyQueuePage() {
     const res = await fetch('/api/fab/ready-queue', {
       headers: { Authorization: `Bearer ${session.access_token}` },
     })
-    if (res.ok) setItems((await res.json()).items ?? [])
+    if (res.ok) {
+      const body = await res.json()
+      setItems(body.items ?? [])
+      // "Nothing ready" and "we could not ask" are different answers and the
+      // screen must never show the first when it means the second.
+      setNote(body.note ?? null)
+    }
     setFetching(false)
   }, [])
 
@@ -62,7 +69,13 @@ export default function ReadyQueuePage() {
           {fetching ? 'Checking Hub…' : `${items.length} job${items.length !== 1 ? 's' : ''} ready to start`}
         </p>
 
-        {items.length === 0 && !fetching && (
+        {note && !fetching && (
+          <div className="rounded-xl p-3 mb-3" style={{ background: 'var(--chip-warning-bg)', border: '0.5px solid var(--chip-warning-bg)' }}>
+            <p className="text-sm" style={{ color: 'var(--warning)' }}>{note}</p>
+          </div>
+        )}
+
+        {items.length === 0 && !fetching && !note && (
           <div className="rounded-xl p-6 text-center" style={{ background: 'var(--surface)', border: '0.5px solid var(--border)' }}>
             <p style={{ color: 'var(--text-2)' }}>No jobs ready. Waiting for drawings and steel delivery signals from Hub.</p>
           </div>
