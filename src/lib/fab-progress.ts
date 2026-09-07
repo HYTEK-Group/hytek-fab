@@ -1,8 +1,21 @@
 // Hub progress feed. computeProgressRow() is pure (testable, no DB).
-// computeAndUpsertProgress() fetches rows and upserts flow_fab_progress.
+// computeAndPublishProgress() fetches fab's own rows and SENDS the rollup to
+// the Hub as a `fab_progress` event.
+//
+// It used to UPSERT `flow_fab_progress` — a Hub-owned table — directly, from
+// thirteen different routes. That was the side door hytek-fab/SYSTEM.md
+// declared and annotated "# side door — Lane 7 closes". The Hub reads that
+// table in lib/flow/signals/job-state.ts and lib/flow/buffer-snapshot.ts; it is
+// the Hub's fact, and from here on the Hub is the only writer of it.
+//
+// The rename is not cosmetic. "Upsert" named a database operation on someone
+// else's table; "publish" names what fab is actually entitled to do — state a
+// fact about its own work and let the owner record it.
 import { getSupabaseAdmin } from './supabase-admin'
 import { buildNarrative } from './fab-narrative'
 import { tonnageSummary } from './fab-tonnage'
+import { sendFabEventLogged } from './hub-events'
+import { buildProgressEvent } from './hub-event-builders'
 import type {
   FabMark, FabContractorPackage, FabContractorUpdate, FabDispatchLoad,
   FabProgressRow, FabProgressPackageSummary, FabProgressLoadSummary, FabProgressStatus,
@@ -127,7 +140,20 @@ export function computeProgressRow(
   return { ...base, narrative }
 }
 
-export async function computeAndUpsertProgress(fabJobId: string): Promise<void> {
+/**
+ * Recompute this job's rollup and tell the Hub.
+ *
+ * Returns void, exactly as the upsert version did, so the thirteen floor routes
+ * that call it keep their shape: a QC pass must not fail because the Hub is
+ * slow. A genuine send failure is recorded in `fab_events` (kind
+ * 'hub_send_failed') by sendFabEventLogged and surfaces on the Exceptions
+ * screen — the floor action still succeeds.
+ *
+ * The actor is the feed itself, not the person who triggered the recompute: the
+ * rollup is a derived fact, and an exception row saying "Jamie's QC pass failed"
+ * would point at the wrong thing when the real fault is the Hub being down.
+ */
+export async function computeAndPublishProgress(fabJobId: string): Promise<void> {
   const admin = getSupabaseAdmin()
 
   const { data: jobRow } = await admin
@@ -168,10 +194,10 @@ export async function computeAndUpsertProgress(fabJobId: string): Promise<void> 
     today,
   )
 
-  await admin
-    .from('flow_fab_progress')
-    .upsert(
-      { ...row, updated_at: new Date().toISOString() },
-      { onConflict: 'fab_job_id' },
-    )
+  await sendFabEventLogged(
+    admin,
+    buildProgressEvent(row, new Date().toISOString()),
+    fabJobId,
+    'system:fab-progress-feed',
+  )
 }

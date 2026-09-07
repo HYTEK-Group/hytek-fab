@@ -3,7 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { getSupervisorCaller } from '@/lib/fab-auth'
-import { computeAndUpsertProgress } from '@/lib/fab-progress'
+import { computeAndPublishProgress } from '@/lib/fab-progress'
 
 export const dynamic = 'force-dynamic'
 
@@ -46,6 +46,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       .eq('id', id)
   }
 
-  await computeAndUpsertProgress(pkg.fab_job_id)
+  await computeAndPublishProgress(pkg.fab_job_id)
   return NextResponse.json({ update: data }, { status: 201 })
 }
