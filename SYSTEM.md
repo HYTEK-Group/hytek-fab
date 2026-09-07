@@ -8,7 +8,8 @@ supabase:
     - NEXT_PUBLIC_SUPABASE_URL
     - NEXT_PUBLIC_SUPABASE_ANON_KEY
     - SUPABASE_URL
-    - SUPABASE_SERVICE_ROLE_KEY
+    - SUPABASE_SERVICE_ROLE_KEY   # the fallback only — Lane 13 removes it
+    - SUPABASE_ROLE_KEY           # role app_fab; the bearer, with the anon key as apikey
     - FAB_URL
 tables:
   owns:
@@ -48,7 +49,8 @@ hosts:
     - hytek-fab.vercel.app
 env:
   privileged:
-    - SUPABASE_SERVICE_ROLE_KEY
+    - SUPABASE_ROLE_KEY           # scoped to the grants below — this is the target state
+    - SUPABASE_SERVICE_ROLE_KEY   # bypasses every grant — Lane 13 deletes it from Vercel and from here
 crons: []
 events:
   out:
@@ -71,6 +73,24 @@ exemptions:
 2. **Where its data lives.** SHARED `gqtikzguvhukpujyxkez` only. There is no
    hard-coded project ref in the code; the client is built from
    `NEXT_PUBLIC_SUPABASE_URL` / `SUPABASE_URL` / `FAB_URL`.
+2a. **What it connects AS.** Role **`app_fab`** — `SUPABASE_ROLE_KEY` as the
+   bearer, the anon key as `apikey` (`src/lib/supabase-admin.ts`). The service
+   key it used to hold does not have permissions; it has no permissions *checks*,
+   and read and wrote every table in SHARED — the mint's `jobs`, the Hub's
+   `flow_*`, detailing's `tasks`, invoicing's triggers, `profiles` including the
+   password column that was readable in plain text until 06/09. Under `app_fab`
+   the `tables` list below stops being a description and becomes the grant: a
+   re-added `flow_fab_progress` write does not only fail
+   `npm run test:architecture`, it gets `42501` from Postgres.
+   Until Lane 13 CP1 mints the role there is nothing to use, so the client falls
+   back to `SUPABASE_SERVICE_ROLE_KEY` and **warns on every cold start** — a
+   fallback nobody can see is a fallback that becomes permanent.
+   `supabaseAdminKeyMode()` answers "are we on the role key yet?" without
+   reading a deploy log. OWNER: Lane 13. DATE: by 30/11/2026.
+   Grants the role needs: SELECT on `jobs` (`id, quote_number, name, client,
+   location, hubspot_deal_id, is_test` — column-level), `job_aliases`
+   (`key, quote_number`), `profiles`; ALL on the `fab_*` tables and `job_bom`
+   listed under `owns`; **nothing on `flow_*`**.
 3. **What it owns.** Every `fab_*` table: jobs, marks, tasks, time and weekly
    entries, import batches, dispatch loads, delivery stages, proof photos, QC
    events, the append-only `fab_events` exception log, PINs and their attempt
