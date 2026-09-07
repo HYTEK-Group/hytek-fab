@@ -9,6 +9,7 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:architecture": "vitest run --config vitest.architecture.config.ts",
+    "migrate": "node scripts/migrate.mjs",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
   },

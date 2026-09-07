@@ -117,7 +117,10 @@ export async function POST(req: NextRequest) {
     .eq('quote_number', shared.quote_number)
     .maybeSingle()
 
-  if (existing) return NextResponse.json({ job: existing, created: false, matched_by: resolved.matchedBy })
+  if (existing) {
+    await consumeFromQueue(admin, shared.quote_number)
+    return NextResponse.json({ job: existing, created: false, matched_by: resolved.matchedBy })
+  }
 
   const { data, error } = await admin
     .from('fab_jobs')
@@ -142,5 +145,23 @@ export async function POST(req: NextRequest) {
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // The job has left the queue. Best-effort on purpose: the fab_jobs row is the
+  // fact that matters and it is already written, and GET /api/fab/ready-queue
+  // self-heals any row this misses. Failing the Start Fabrication a supervisor
+  // just did, because a bookkeeping update did not take, would be the wrong
+  // trade every time.
+  await consumeFromQueue(admin, shared.quote_number)
+
   return NextResponse.json({ job: data, created: true, matched_by: resolved.matchedBy }, { status: 201 })
+}
+
+/** Stamp `consumed_at` so the job stops being offered. Never throws. */
+async function consumeFromQueue(admin: ReturnType<typeof getSupabaseAdmin>, quoteNumber: string) {
+  const { error } = await admin
+    .from('fab_ready_queue')
+    .update({ consumed_at: new Date().toISOString() })
+    .eq('quote_number', quoteNumber)
+    .is('consumed_at', null)
+  if (error) console.warn(`[fab/jobs] could not stamp fab_ready_queue.consumed_at for ${quoteNumber}: ${error.message}`)
 }
