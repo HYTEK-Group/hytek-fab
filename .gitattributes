@@ -1,0 +1,21 @@
+# LINE ENDINGS ARE NOT COSMETIC HERE.
+#
+# This repo had no .gitattributes, so Git's core.autocrlf converts files to CRLF
+# on checkout on Windows. Proved in hytek-lws on 07/09/2026, both directions: a
+# `.mjs` module with CRLF makes vitest FAIL TO LOAD IT —
+# "SyntaxError: Invalid or unexpected token" — while `node --check` and esbuild
+# parse the identical bytes without complaint. Worse, vitest blames the file
+# that IMPORTED it, so the error points at a comment line in some unrelated test
+# and the real cause is invisible.
+#
+# CI runs on Linux, checks out LF, and is green. So the failure appears only on
+# a developer's Windows machine, after a fresh checkout, on code nobody touched.
+# That is the worst shape a bug can have: it teaches people that a red local
+# suite means nothing.
+#
+# It matters in THIS repo from Lane 7 CP4 on, which moved the ingest bridge's
+# job-number parser into scripts/lib/job-ref.mjs and widened vitest.config.ts to
+# run scripts/**/*.test.mjs. Same file type, same trap — closed before anybody
+# meets it.
+*.mjs text eol=lf
+*.sql text eol=lf
