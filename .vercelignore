@@ -1,0 +1,18 @@
+# WHAT VERCEL MUST NOT UPLOAD.
+#
+# Git worktrees live INSIDE HYTEK repos, and a CLI deploy (`vercel --prod`)
+# uploads the working directory rather than what git tracks. Measured 10/09/2026:
+# hytek-purchasing shipped 55,140 files for a 203-file app and its Lambda ran out
+# of file descriptors on production — `EMFILE: too many open files` opening its
+# own page bundle. This repo is nearly clean today; the guard is here so it stays
+# that way the first time a session opens a worktree in it.
+#
+# GitHub-triggered deploys only see tracked files and were never affected. This
+# closes the CLI path.
+
+.worktrees
+.claude
+node_modules
+.next
+.git
+*.log
