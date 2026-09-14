@@ -52,6 +52,18 @@ export function getSupabaseAdmin(): SupabaseClient {
   const roleKey = (process.env.SUPABASE_ROLE_KEY ?? '').trim()
   const anonKey = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '').trim()
 
+  // A Supabase secret key made for fab's role (secret_jwt_template
+  // {"role":"app_fab"}) is sent as the key itself. As a Bearer beside the anon
+  // key Supabase refuses it (PGRST301 "Expected 3 parts in JWT"). Detailing and
+  // invoicing run this way in production since 13/09/2026.
+  if (roleKey.startsWith('sb_secret_')) {
+    mode = 'role'
+    cached = createClient(url, roleKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    })
+    return cached
+  }
+
   if (roleKey && anonKey) {
     mode = 'role'
     cached = createClient(url, anonKey, {

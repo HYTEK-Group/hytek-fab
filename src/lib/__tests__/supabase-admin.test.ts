@@ -38,6 +38,20 @@ const auth = (i = 0) =>
   ((created.calls[i].opts.global as { headers?: Record<string, string> } | undefined)?.headers ?? {}).Authorization
 
 describe('getSupabaseAdmin', () => {
+  it('an sb_secret_ role key is sent AS the key — as a Bearer beside anon, Supabase refuses it (PGRST301)', () => {
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'anon-key' // present, and must NOT be the apikey
+    process.env.SUPABASE_ROLE_KEY = 'sb_secret_app_fab_example'
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-key' // present, and must NOT be used
+    getSupabaseAdmin()
+    expect(created.calls).toHaveLength(1)
+    expect(created.calls[0].key).toBe('sb_secret_app_fab_example')
+    expect(auth()).toBeUndefined()
+    expect(supabaseAdminKeyMode()).toBe('role')
+    expect(JSON.stringify(created.calls[0])).not.toContain('service-key')
+    expect(JSON.stringify(created.calls[0])).not.toContain('anon-key')
+    expect(console.warn).not.toHaveBeenCalled()
+  })
+
   it('uses the ANON key as apikey and the ROLE key as the bearer — that is what makes it app_fab', () => {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'anon-key'
     process.env.SUPABASE_ROLE_KEY = 'role-key'

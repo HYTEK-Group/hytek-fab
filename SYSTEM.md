@@ -9,7 +9,7 @@ supabase:
     - NEXT_PUBLIC_SUPABASE_ANON_KEY
     - SUPABASE_URL
     - SUPABASE_SERVICE_ROLE_KEY   # the fallback only — Lane 13 removes it
-    - SUPABASE_ROLE_KEY           # role app_fab; the bearer, with the anon key as apikey
+    - SUPABASE_ROLE_KEY           # role app_fab; an sb_secret_ key is the client key itself (an older JWT role key goes as the bearer with the anon key)
     - FAB_URL
     - SUPABASE_ACCESS_TOKEN   # Management API, scripts/migrate.mjs only — never in a deployed bundle
 tables:
@@ -91,8 +91,11 @@ exemptions:
 2. **Where its data lives.** SHARED `gqtikzguvhukpujyxkez` only. There is no
    hard-coded project ref in the code; the client is built from
    `NEXT_PUBLIC_SUPABASE_URL` / `SUPABASE_URL` / `FAB_URL`.
-2a. **What it connects AS.** Role **`app_fab`** — `SUPABASE_ROLE_KEY` as the
-   bearer, the anon key as `apikey` (`src/lib/supabase-admin.ts`). The service
+2a. **What it connects AS.** Role **`app_fab`** — an `sb_secret_`
+   `SUPABASE_ROLE_KEY` (a Supabase secret key templated to `app_fab`) is the
+   client key itself; an older JWT role key goes as the bearer with the anon key
+   as `apikey` (`src/lib/supabase-admin.ts`). Storage access for the role
+   (fab-proof, fab-drawings) is `hytek-brain/sql/migrations/004`. The service
    key it used to hold does not have permissions; it has no permissions *checks*,
    and read and wrote every table in SHARED — the mint's `jobs`, the Hub's
    `flow_*`, detailing's `tasks`, invoicing's triggers, `profiles` including the
