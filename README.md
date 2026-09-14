@@ -28,4 +28,4 @@ npm run build              # production build
 | `/jobs/[id]/receive` | Material receipt | wk2 |
 | `/tonnes` | Weekly SS tonnes → `flow_fab_entries` | wk2 |
 
-Auth: `admin@hytekframing.com.au` / `Hytek2026`.
+Auth: your own named login.
