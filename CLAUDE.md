@@ -89,4 +89,6 @@ tables. No app-to-app reads. Hub only.
 
 ## Drawings
 - PDFs uploaded to Supabase Storage bucket `fab-drawings/{quote_number}/`
-- Sync server (Y: drive) handles uploads — app reads signed URLs only
+- The office-server ingest bridge posts each PDF to `POST /api/fab/jobs/[id]/drawings`
+  (supervisor token); fab uploads it as role app_fab (upsert) and serves signed URLs.
+  The bucket write grant is `sql/migrations/016-fab-drawings-bucket-write.sql`.

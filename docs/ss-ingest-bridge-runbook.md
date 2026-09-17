@@ -6,7 +6,7 @@ the network — Vercel can't see Y:). It loads, per structural-steel job:
 
 - **marks + tonnage** → `POST /api/fab/jobs/{id}/import-assembly` (re-issue safe)
 - **bill of materials** → `POST /api/fab/jobs/{id}/import-bom` → `job_bom` (purchasing reads)
-- **shop drawings** → the `fab-drawings` storage bucket
+- **shop drawings** → `POST /api/fab/jobs/{id}/drawings` → the `fab-drawings` storage bucket
 
 It is idempotent: unchanged marks re-import to no-ops, a re-issue is flagged for
 review (never silently overwritten), and each BOM report replaces only its own

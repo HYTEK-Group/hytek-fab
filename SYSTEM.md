@@ -95,7 +95,10 @@ exemptions:
    `SUPABASE_ROLE_KEY` (a Supabase secret key templated to `app_fab`) is the
    client key itself; an older JWT role key goes as the bearer with the anon key
    as `apikey` (`src/lib/supabase-admin.ts`). Storage access for the role
-   (fab-proof, fab-drawings) is `hytek-brain/sql/migrations/004`. The service
+   (fab-proof, fab-drawings) is `hytek-brain/sql/migrations/004`, which gave
+   fab-drawings read only; fab also WRITES fab-drawings (insert/update, for the
+   upsert in `POST /api/fab/jobs/[id]/drawings`), granted by this repo's
+   `sql/migrations/016-fab-drawings-bucket-write.sql` (17/09/2026). The service
    key it used to hold does not have permissions; it has no permissions *checks*,
    and read and wrote every table in SHARED — the mint's `jobs`, the Hub's
    `flow_*`, detailing's `tasks`, invoicing's triggers, `profiles` including the
@@ -159,7 +162,10 @@ exemptions:
    `/api/fab/bridge/proof/[quote]` with `FAB_BRIDGE_TOKEN`; and the office-server
    ingest bridge, which mints its own kiosk token with `KIOSK_SECRET` and posts
    jobs, assembly lists, BOMs and drawings. The bridge holds **no database
-   credential** — it is a pure HTTP client of this app.
+   credential** — it is a pure HTTP client of this app. Drawings go to
+   `POST /api/fab/jobs/[id]/drawings` (supervisor token, PDF only, stored at
+   `fab-drawings/{quote_number}/{file name}` with upsert). That handler was
+   missing from 07/09 to 17/09/2026, so every drawing got 405 in that window.
 8a. **`fab_tasks` has one writer, and it is fab.** The Hub writes it today, from
    `lib/flow/signals/apply-rework-variation.ts` — an insert on rework/variation
    raised, `status='done'` on resolved, `completed_at=null` on reopened. That is
