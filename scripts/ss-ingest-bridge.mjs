@@ -53,6 +53,7 @@ import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { createHmac } from 'node:crypto'
 import { jobNameFromFolder, jobRefFromFolder } from './lib/job-ref.mjs'
+import { uploadDrawing } from './lib/drawing-upload.mjs'
 
 const cfg = {
   yearRoot: process.env.SS_YEAR_ROOT,
@@ -198,18 +199,20 @@ for (const j of jobs) {
     console.log(`  BOM ${j.bomFiles.length} report(s) → HTTP ${res.status}` + (res.ok ? `  (${r.total_lines ?? 0} line(s)${r.skipped?.length ? `, ${r.skipped.length} skipped` : ''})` : `  ${r.error || ''}`))
   }
 
+  // Drawings go by signed upload URL: fab checks and signs, the bytes go
+  // straight to storage, so a 26 MB assemblies PDF is not refused by Vercel's
+  // 4.5 MB request limit. See scripts/lib/drawing-upload.mjs.
   let drew = 0
   for (const f of j.drawings) {
     const name = f.split(/[\\/]/).pop()
-    const fd = new FormData()
-    fd.append('file', new File([readFileSync(f)], name, { type: 'application/pdf' }))
-    const res = await fetch(`${cfg.fabUrl}/api/fab/jobs/${job.id}/drawings`, {
-      method: 'POST', headers: { Authorization: `Bearer ${tok}` }, body: fd,
-    })
-    if (!res.ok) {
-      const e = await res.json().catch(() => ({}))
-      console.log(`  drawing ERR ${name}: HTTP ${res.status} ${e.error || ''}`)
-    } else drew++
+    let r
+    try {
+      r = await uploadDrawing({ fabUrl: cfg.fabUrl, token: tok, jobId: job.id, name, bytes: readFileSync(f) })
+    } catch (e) {
+      r = { ok: false, error: e.message }
+    }
+    if (!r.ok) console.log(`  drawing ERR ${name}: ${r.error}`)
+    else drew++
   }
   console.log(`  drawings: ${drew}/${j.drawings.length} uploaded`)
   processed++

@@ -17,6 +17,8 @@ const h = vi.hoisted(() => {
     job: null as null | { quote_number: string },
     uploads: [] as Array<{ bucket: string; path: string; opts: Record<string, unknown>; size: number }>,
     uploadError: null as null | { message: string },
+    signs: [] as Array<{ bucket: string; path: string; opts: Record<string, unknown> }>,
+    signError: null as null | { message: string },
     dbTouched: 0,
   }
   const client = {
@@ -35,6 +37,12 @@ const h = vi.hoisted(() => {
           const size = body instanceof Blob ? body.size : (body as Buffer).length
           state.uploads.push({ bucket, path, opts, size })
           return state.uploadError ? { data: null, error: state.uploadError } : { data: { path }, error: null }
+        },
+        createSignedUploadUrl: async (path: string, opts: Record<string, unknown>) => {
+          state.signs.push({ bucket, path, opts })
+          return state.signError
+            ? { data: null, error: state.signError }
+            : { data: { signedUrl: `https://storage.test/upload/sign/${bucket}/${path}?token=tok`, path, token: 'tok' }, error: null }
         },
       }),
     },
@@ -64,13 +72,97 @@ function post(file?: File | string) {
   return POST(req, { params: Promise.resolve({ id: 'job-1' }) })
 }
 
+function ask(body: unknown) {
+  const req = new NextRequest('https://hytek-fab.vercel.app/api/fab/jobs/job-1/drawings', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer kiosk-token', 'Content-Type': 'application/json' },
+    body: typeof body === 'string' ? body : JSON.stringify(body),
+  })
+  return POST(req, { params: Promise.resolve({ id: 'job-1' }) })
+}
+
 const supervisor = { role: 'supervisor', name: 'SS Ingest Bridge', ns: 'kiosk', key: 'pin:SS Ingest Bridge' }
 
 beforeEach(() => {
-  Object.assign(h.state, { caller: supervisor, job: { quote_number: '26079902' }, uploads: [], uploadError: null, dbTouched: 0 })
+  Object.assign(h.state, {
+    caller: supervisor, job: { quote_number: '26079902' }, uploads: [], uploadError: null, signs: [], signError: null, dbTouched: 0,
+  })
 })
 
-describe('POST /api/fab/jobs/[id]/drawings', () => {
+// Vercel refuses a request body over 4.5 MB before the handler runs, and 54 of
+// the 2,316 drawing PDFs on the drive are bigger (the combined ASSEMBLIES PDFs
+// run to 26 MB). So the bridge sends only {name, size} and gets back a signed
+// upload URL; the bytes go straight to storage.
+describe('POST /api/fab/jobs/[id]/drawings — signed upload (JSON)', () => {
+  const BIG = Math.round(26.03 * 1024 * 1024)
+  const NAME = 'HG260007 BEERWAH FIRE STATION FRS - ASSEMBLY_IFA 13.04.2026.pdf'
+
+  it('hands back a signed upload URL for a 26 MB assemblies PDF, uploading nothing itself', async () => {
+    const res = await ask({ name: NAME, size: BIG })
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body).toMatchObject({ ok: true, path: `26079902/${NAME}`, token: 'tok' })
+    expect(body.signedUrl).toContain(`fab-drawings/26079902/${NAME}`)
+    expect(h.state.signs).toEqual([{ bucket: 'fab-drawings', path: `26079902/${NAME}`, opts: { upsert: true } }])
+    expect(h.state.uploads).toHaveLength(0)
+  })
+
+  it('refuses a caller who is not a supervisor, before touching the database', async () => {
+    h.state.caller = { role: 'fabricator', name: 'Floor', ns: 'kiosk', key: 'pin:Floor' }
+    const res = await ask({ name: 'A1.pdf', size: 100 })
+    expect(res.status).toBe(403)
+    expect(h.state.dbTouched).toBe(0)
+    expect(h.state.signs).toHaveLength(0)
+  })
+
+  it('keeps only the base name', async () => {
+    const res = await ask({ name: '..\\..\\other-job\\A1.pdf', size: 100 })
+    expect(res.status).toBe(200)
+    expect(h.state.signs[0].path).toBe('26079902/A1.pdf')
+  })
+
+  it.each([
+    ['a name that is not a PDF', { name: 'notes.txt', size: 100 }],
+    ['no name', { size: 100 }],
+    ['no size', { name: 'A1.pdf' }],
+    ['a zero size', { name: 'A1.pdf', size: 0 }],
+    ['a size that is not a number', { name: 'A1.pdf', size: '100' }],
+  ])('400s on %s', async (_label, body) => {
+    const res = await ask(body)
+    expect(res.status).toBe(400)
+    expect(h.state.signs).toHaveLength(0)
+  })
+
+  it('400s on a body that is not JSON', async () => {
+    const res = await ask('{not json')
+    expect(res.status).toBe(400)
+    expect(h.state.signs).toHaveLength(0)
+  })
+
+  it('413s on a drawing over 50 MB (none on the drive today; the biggest is 26 MB)', async () => {
+    const res = await ask({ name: 'A1.pdf', size: 51 * 1024 * 1024 })
+    expect(res.status).toBe(413)
+    expect(h.state.signs).toHaveLength(0)
+  })
+
+  it('404s on an unknown job', async () => {
+    h.state.job = null
+    const res = await ask({ name: 'A1.pdf', size: 100 })
+    expect(res.status).toBe(404)
+    expect(h.state.signs).toHaveLength(0)
+  })
+
+  it('500s with the storage message when signing fails, so the bridge log says why', async () => {
+    h.state.signError = { message: 'new row violates row-level security policy' }
+    const res = await ask({ name: 'A1.pdf', size: 100 })
+    expect(res.status).toBe(500)
+    await expect(res.json()).resolves.toMatchObject({ error: expect.stringContaining('row-level security') })
+  })
+})
+
+// The multipart form stays for small files: the hytek-bridge fab-tekla-ingest
+// plugin still posts that way.
+describe('POST /api/fab/jobs/[id]/drawings — multipart', () => {
   it('is exported at all (the bridge got 405 for every drawing without it)', () => {
     expect(typeof POST).toBe('function')
   })
@@ -141,11 +233,14 @@ describe('POST /api/fab/jobs/[id]/drawings', () => {
     expect(h.state.uploads[0].path).toBe('26079902/A2.PDF')
   })
 
-  it('413s on a file over the size cap', async () => {
-    const big = new Uint8Array(21 * 1024 * 1024)
+  it('413s on a multipart file over 4.5 MB and points the caller at the signed upload', async () => {
+    // Vercel would refuse this before the handler; on any other host the
+    // route says the same thing, so the answer does not depend on the host.
+    const big = new Uint8Array(5 * 1024 * 1024)
     big.set(PDF)
     const res = await post(new File([big], 'huge.pdf', { type: 'application/pdf' }))
     expect(res.status).toBe(413)
+    await expect(res.json()).resolves.toMatchObject({ error: expect.stringContaining('signed upload') })
     expect(h.state.uploads).toHaveLength(0)
   })
 

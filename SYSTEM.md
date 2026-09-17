@@ -97,8 +97,10 @@ exemptions:
    as `apikey` (`src/lib/supabase-admin.ts`). Storage access for the role
    (fab-proof, fab-drawings) is `hytek-brain/sql/migrations/004`, which gave
    fab-drawings read only; fab also WRITES fab-drawings (insert/update, for the
-   upsert in `POST /api/fab/jobs/[id]/drawings`), granted by this repo's
-   `sql/migrations/016-fab-drawings-bucket-write.sql` (17/09/2026). The service
+   upsert in `POST /api/fab/jobs/[id]/drawings` and the signed upload URLs it
+   mints there), granted by this repo's
+   `sql/migrations/016-fab-drawings-bucket-write.sql` (written 17/09/2026; in
+   force only once the runner has applied it). The service
    key it used to hold does not have permissions; it has no permissions *checks*,
    and read and wrote every table in SHARED — the mint's `jobs`, the Hub's
    `flow_*`, detailing's `tasks`, invoicing's triggers, `profiles` including the
@@ -164,8 +166,13 @@ exemptions:
    jobs, assembly lists, BOMs and drawings. The bridge holds **no database
    credential** — it is a pure HTTP client of this app. Drawings go to
    `POST /api/fab/jobs/[id]/drawings` (supervisor token, PDF only, stored at
-   `fab-drawings/{quote_number}/{file name}` with upsert). That handler was
-   missing from 07/09 to 17/09/2026, so every drawing got 405 in that window.
+   `fab-drawings/{quote_number}/{file name}` with upsert). The bridge sends only
+   JSON `{name, size}` and PUTs the PDF to the signed upload URL fab returns
+   (`scripts/lib/drawing-upload.mjs`), because Vercel refuses a request body
+   over 4.5 MB and the combined assemblies PDFs run to 26 MB. Multipart is still
+   accepted for files of 4.5 MB and under. No POST handler existed from 07/09,
+   so every drawing got 405 until this handler is deployed and migration 016 is
+   applied.
 8a. **`fab_tasks` has one writer, and it is fab.** The Hub writes it today, from
    `lib/flow/signals/apply-rework-variation.ts` — an insert on rework/variation
    raised, `status='done'` on resolved, `completed_at=null` on reopened. That is

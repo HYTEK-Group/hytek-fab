@@ -89,6 +89,9 @@ tables. No app-to-app reads. Hub only.
 
 ## Drawings
 - PDFs uploaded to Supabase Storage bucket `fab-drawings/{quote_number}/`
-- The office-server ingest bridge posts each PDF to `POST /api/fab/jobs/[id]/drawings`
-  (supervisor token); fab uploads it as role app_fab (upsert) and serves signed URLs.
+- The office-server ingest bridge sends `{name, size}` to `POST /api/fab/jobs/[id]/drawings`
+  (supervisor token); fab checks it and returns a signed upload URL (as role app_fab,
+  upsert), and the bridge PUTs the PDF there (`scripts/lib/drawing-upload.mjs`) —
+  never the bytes through fab, because Vercel refuses bodies over 4.5 MB.
+  Small files may still be posted multipart. Fab serves signed read URLs.
   The bucket write grant is `sql/migrations/016-fab-drawings-bucket-write.sql`.

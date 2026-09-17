@@ -6,7 +6,9 @@
 -- service-role key. Lane 7 CP4 (07/09/2026) took that key off the bridge and
 -- sent drawings to POST /api/fab/jobs/[id]/drawings instead, but the POST was
 -- never written, so every drawing got 405. The handler now exists (17/09/2026)
--- and uploads `{quote_number}/{file name}` with upsert, as fab's own role.
+-- and uploads `{quote_number}/{file name}` with upsert, as fab's own role —
+-- or, for drawings over Vercel's 4.5 MB body limit, mints a signed upload URL
+-- (upsert) for that path as fab's own role, which needs the same two rights.
 --
 -- hytek-brain/sql/migrations/004-storage-roles-shared.sql (D27) gave app_fab
 -- fab-drawings READ only, because at the time "the drawings arrive from the
