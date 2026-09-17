@@ -99,8 +99,9 @@ exemptions:
    fab-drawings read only; fab also WRITES fab-drawings (insert/update, for the
    upsert in `POST /api/fab/jobs/[id]/drawings` and the signed upload URLs it
    mints there), granted by this repo's
-   `sql/migrations/016-fab-drawings-bucket-write.sql` (written 17/09/2026; in
-   force only once the runner has applied it). The service
+   `sql/migrations/016-fab-drawings-bucket-write.sql` (applied 17/09/2026
+   through the runner, staging then production; `SET ROLE app_fab` can write
+   fab-drawings and is still refused on other buckets). The service
    key it used to hold does not have permissions; it has no permissions *checks*,
    and read and wrote every table in SHARED — the mint's `jobs`, the Hub's
    `flow_*`, detailing's `tasks`, invoicing's triggers, `profiles` including the
@@ -176,8 +177,10 @@ exemptions:
    (`scripts/lib/drawing-upload.mjs`), because Vercel refuses a request body
    over 4.5 MB and the combined assemblies PDFs run to 26 MB. Multipart is still
    accepted for files of 4.5 MB and under. No POST handler existed from 07/09,
-   so every drawing got 405 until this handler is deployed and migration 016 is
-   applied.
+   so every drawing got 405 until this handler was deployed (migration 016, the
+   write permission it needs, was applied on 17/09/2026). The office-server
+   bridge has to be running this repo's current `scripts/` for the upload to
+   work end to end; that proof is still to come.
 8a. **`fab_tasks` has one writer, and it is fab.** The Hub writes it today, from
    `lib/flow/signals/apply-rework-variation.ts` — an insert on rework/variation
    raised, `status='done'` on resolved, `completed_at=null` on reopened. That is
