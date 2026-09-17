@@ -108,11 +108,13 @@ exemptions:
    the `tables` list below stops being a description and becomes the grant: a
    re-added `flow_fab_progress` write does not only fail
    `npm run test:architecture`, it gets `42501` from Postgres.
-   Until Lane 13 CP1 mints the role there is nothing to use, so the client falls
-   back to `SUPABASE_SERVICE_ROLE_KEY` and **warns on every cold start** — a
-   fallback nobody can see is a fallback that becomes permanent.
-   `supabaseAdminKeyMode()` answers "are we on the role key yet?" without
-   reading a deploy log. OWNER: Lane 13. DATE: by 30/11/2026.
+   Production has run on its own `app_fab` key since 15/09/2026 (hytek-brain
+   D30 and D37). The code still falls back to `SUPABASE_SERVICE_ROLE_KEY` when
+   `SUPABASE_ROLE_KEY` is unset, and **warns on every cold start** when it does —
+   a fallback nobody can see is a fallback that becomes permanent.
+   `supabaseAdminKeyMode()` answers "are we on the role key?" without reading a
+   deploy log. Lane 13 deletes the fallback and the service key. OWNER: Lane 13.
+   DATE: by 30/11/2026.
    Grants the role needs: SELECT on `jobs` (`id, quote_number, name, client,
    location, hubspot_deal_id, is_test` — column-level), `job_aliases`
    (`key, quote_number`), `profiles`; ALL on the `fab_*` tables and `job_bom`
@@ -140,7 +142,9 @@ exemptions:
    per supervisor. `READY_QUEUE_SOURCE=hub-poll` puts the old path back for one
    environment while the Hub's `fab` subscriber is still on `NOT_WIRED_YET`;
    `readyQueueByPolling()` is deleted the day production flips to `ingest`
-   (Lane 13 cutover step 7 — owner Lane 13, by 30/11/2026). `POST /api/fab/jobs`
+   (Lane 13 cutover step 7 — owner Lane 13, by 30/11/2026). On 17/09/2026 `fab`
+   was still on the Hub's `NOT_WIRED_YET` list (`hytek-hub/lib/outbox/subscriptions.ts`),
+   so the push above is the target, not yet the traffic (see 8a). `POST /api/fab/jobs`
    **validates every number against SHARED `jobs`** and refuses an unknown one
    with 422; a legacy `HG`/`HM`/7-digit reference is resolved through
    `job_aliases` and the row is created under the CANONICAL number, never the
@@ -157,7 +161,8 @@ exemptions:
    a fab-scoped token, not the unscoped `HUB_INTERNAL_TOKEN` it used to hold.
    When that token is unset the Hub is reported UNREACHABLE; there is no
    permissive stub returning a made-up job-state. No HubSpot, Xero, Asana, Slack,
-   Resend, Sentry or invoicing calls.
+   Resend or invoicing calls. Crash reports go to Sentry only when
+   `NEXT_PUBLIC_SENTRY_DSN` is set (hosts above).
 8. **Who calls it.** The Hub's **outbox worker**, at `POST /api/fab/ingest` with
    `x-fab-import-secret` — seven verbs, listed in `events.in` above.
    hytek-detailing's dispatch pages, through `GET /api/fab/bridge/dispatch` and
@@ -202,3 +207,5 @@ exemptions:
 11. **The rule.** `npm run test:architecture` fails on anything this file does not
     declare. Do not widen it to make a change pass — close the door instead, or
     raise it with the lane that owns it.
+
+Last checked: 17/09/2026 (front matter against the code by `npm run test:architecture`; the prose re-read against the files it names — the role key is live, and Sentry is wired).
