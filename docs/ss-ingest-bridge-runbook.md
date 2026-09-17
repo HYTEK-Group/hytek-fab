@@ -6,7 +6,10 @@ the network — Vercel can't see Y:). It loads, per structural-steel job:
 
 - **marks + tonnage** → `POST /api/fab/jobs/{id}/import-assembly` (re-issue safe)
 - **bill of materials** → `POST /api/fab/jobs/{id}/import-bom` → `job_bom` (purchasing reads)
-- **shop drawings** → the `fab-drawings` storage bucket
+- **shop drawings** → `POST /api/fab/jobs/{id}/drawings` with `{name, size}` → a signed
+  upload URL → the PDF is PUT straight to the `fab-drawings` storage bucket (so drawings
+  over Vercel's 4.5 MB request limit, up to 50 MB, still arrive). A refused file logs
+  `drawing ERR <name>: <which step refused it and why>`.
 
 It is idempotent: unchanged marks re-import to no-ops, a re-issue is flagged for
 review (never silently overwritten), and each BOM report replaces only its own

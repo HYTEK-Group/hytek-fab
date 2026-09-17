@@ -95,7 +95,13 @@ exemptions:
    `SUPABASE_ROLE_KEY` (a Supabase secret key templated to `app_fab`) is the
    client key itself; an older JWT role key goes as the bearer with the anon key
    as `apikey` (`src/lib/supabase-admin.ts`). Storage access for the role
-   (fab-proof, fab-drawings) is `hytek-brain/sql/migrations/004`. The service
+   (fab-proof, fab-drawings) is `hytek-brain/sql/migrations/004`, which gave
+   fab-drawings read only; fab also WRITES fab-drawings (insert/update, for the
+   upsert in `POST /api/fab/jobs/[id]/drawings` and the signed upload URLs it
+   mints there), granted by this repo's
+   `sql/migrations/016-fab-drawings-bucket-write.sql` (applied 17/09/2026
+   through the runner, staging then production; `SET ROLE app_fab` can write
+   fab-drawings and is still refused on other buckets). The service
    key it used to hold does not have permissions; it has no permissions *checks*,
    and read and wrote every table in SHARED — the mint's `jobs`, the Hub's
    `flow_*`, detailing's `tasks`, invoicing's triggers, `profiles` including the
@@ -164,7 +170,17 @@ exemptions:
    `/api/fab/bridge/proof/[quote]` with `FAB_BRIDGE_TOKEN`; and the office-server
    ingest bridge, which mints its own kiosk token with `KIOSK_SECRET` and posts
    jobs, assembly lists, BOMs and drawings. The bridge holds **no database
-   credential** — it is a pure HTTP client of this app.
+   credential** — it is a pure HTTP client of this app. Drawings go to
+   `POST /api/fab/jobs/[id]/drawings` (supervisor token, PDF only, stored at
+   `fab-drawings/{quote_number}/{file name}` with upsert). The bridge sends only
+   JSON `{name, size}` and PUTs the PDF to the signed upload URL fab returns
+   (`scripts/lib/drawing-upload.mjs`), because Vercel refuses a request body
+   over 4.5 MB and the combined assemblies PDFs run to 26 MB. Multipart is still
+   accepted for files of 4.5 MB and under. No POST handler existed from 07/09,
+   so every drawing got 405 until this handler was deployed (migration 016, the
+   write permission it needs, was applied on 17/09/2026). The office-server
+   bridge has to be running this repo's current `scripts/` for the upload to
+   work end to end; that proof is still to come.
 8a. **`fab_tasks` has one writer, and it is fab.** The Hub writes it today, from
    `lib/flow/signals/apply-rework-variation.ts` — an insert on rework/variation
    raised, `status='done'` on resolved, `completed_at=null` on reopened. That is
