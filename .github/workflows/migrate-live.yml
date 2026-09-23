@@ -47,6 +47,16 @@ name: apply migrations to live
 # applied is exactly the fault this file closes.
 # ───────────────────────────────────────────────────────────────────────────
 
+# AUTO-MERGE STARTS THIS BY HAND (23/09/2026). A merge made by the Auto-merge
+# workflow is pushed with GitHub's own GITHUB_TOKEN, and GitHub never starts a
+# `push` workflow for a push made with that token — so this file never ran for
+# an auto-merged pull request. Measured on hytek-hub #641: migration 084 was
+# merged as e1befa9d and sat unapplied on live until it was run by hand.
+# Auto-merge now dispatches this workflow with `merge_sha` = the commit it just
+# made, and this file treats that exactly like a push: only the migrations that
+# ONE commit added are applied, one `--only` at a time, never a bare `up`.
+# (A dispatch is the one event GITHUB_TOKEN is allowed to start.)
+
 on:
   push:
     branches: [main]
@@ -74,6 +84,10 @@ on:
         description: 'Why, in one line — it goes in the ledger note.'
         required: true
         default: 'manual catch-up from the Actions tab'
+      merge_sha:
+        description: 'Set by Auto-merge only: the merge commit whose own migrations to apply. Leave blank by hand.'
+        required: false
+        default: ''
 
 permissions:
   contents: read
@@ -97,6 +111,9 @@ concurrency:
 
 env:
   RUNNER: scripts/migrate.mjs
+  # The commit this run answers for. A push: the pushed commit. A dispatch from
+  # Auto-merge: the merge it made (main may have moved on since). By hand: main.
+  TARGET_SHA: ${{ github.event.inputs.merge_sha || github.sha }}
   MIG_DIR: sql/migrations
   DB_LABEL: SHARED
 
@@ -119,6 +136,7 @@ jobs:
           BEFORE: ${{ github.event.before }}
           MODE: ${{ github.event_name }}
           ALL: ${{ github.event.inputs.apply_all_pending }}
+          MERGE_SHA: ${{ github.event.inputs.merge_sha }}
         run: |
           set -euo pipefail
           if [ "$MODE" = "schedule" ]; then
@@ -128,6 +146,19 @@ jobs:
             echo "Daily watch: verify only. Nothing will be applied." \
               | tee -a "$GITHUB_STEP_SUMMARY"
             exit 0
+          fi
+          if [ "$MODE" = "workflow_dispatch" ] && [ -n "${MERGE_SHA:-}" ]; then
+            # Auto-merge's own merge. It must be a real commit ON this branch —
+            # anything else is refused before live is looked at.
+            if ! git cat-file -e "$MERGE_SHA^{commit}" 2>/dev/null \
+               || ! git merge-base --is-ancestor "$MERGE_SHA" "$GITHUB_SHA"; then
+              echo "::error title=Not a merge on this branch::merge_sha $MERGE_SHA is not a commit on ${GITHUB_REF_NAME}. Nothing applied."
+              exit 1
+            fi
+            echo "Auto-merge merged $MERGE_SHA — applying only the migrations that commit added." \
+              | tee -a "$GITHUB_STEP_SUMMARY"
+            MODE=auto-merge
+            BEFORE=""
           fi
           if [ "$MODE" = "workflow_dispatch" ]; then
             if [ "$ALL" != "yes" ]; then
@@ -143,12 +174,12 @@ jobs:
           B="$BEFORE"
           if [ -z "$B" ] || [ "$B" = "0000000000000000000000000000000000000000" ] \
              || ! git cat-file -e "$B^{commit}" 2>/dev/null; then
-            B=$(git rev-parse "$GITHUB_SHA^") || B=""
+            B=$(git rev-parse "$TARGET_SHA^") || B=""
           fi
           if [ -z "$B" ]; then
             FILES=""
           else
-            FILES=$(git diff --name-only --diff-filter=ACMR "$B" "$GITHUB_SHA" -- "$MIG_DIR" \
+            FILES=$(git diff --name-only --diff-filter=ACMR "$B" "$TARGET_SHA" -- "$MIG_DIR" \
                     | grep -E '\.sql$' | sed 's#.*/##' | sort || true)
           fi
           if [ -z "$FILES" ]; then
@@ -250,7 +281,7 @@ jobs:
         run: |
           set -euo pipefail
           WHY="${WHY_IN:-}"
-          [ -n "$WHY" ] || WHY="merged to ${GITHUB_REF_NAME} as ${GITHUB_SHA}"
+          [ -n "$WHY" ] || WHY="merged to ${GITHUB_REF_NAME} as ${TARGET_SHA}"
           : > up.txt
           while read -r f; do
             [ -z "$f" ] && continue
@@ -327,11 +358,11 @@ jobs:
             echo "Daily watch — the report is in the job summary; an issue is opened only if it is red."
             exit 0
           fi
-          PR=$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls" --jq '.[0].number' 2>/dev/null || true)
+          PR=$(gh api "repos/$GITHUB_REPOSITORY/commits/$TARGET_SHA/pulls" --jq '.[0].number' 2>/dev/null || true)
           if [ -n "${PR:-}" ] && [ "$PR" != "null" ]; then
             gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body-file comment.md || true
           else
-            echo "No pull request found for $GITHUB_SHA — the report is in the job summary only."
+            echo "No pull request found for $TARGET_SHA — the report is in the job summary only."
           fi
 
       - name: Open an issue for Scott
@@ -349,7 +380,7 @@ jobs:
             echo "database matching git."
             echo ""
             echo "- Repo: \`$GITHUB_REPOSITORY\`"
-            echo "- Commit: \`$GITHUB_SHA\`"
+            echo "- Commit: \`$TARGET_SHA\`"
             echo "- Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
             echo ""
             echo "**Until this is cleared, merged code may be running against a database that does**"
@@ -362,5 +393,5 @@ jobs:
             echo '```'
           } > issue.md
           gh issue create --repo "$GITHUB_REPOSITORY" \
-            --title "Live migrations: ${DB_LABEL} did not end clean ($GITHUB_SHA)" \
+            --title "Live migrations: ${DB_LABEL} did not end clean ($TARGET_SHA)" \
             --assignee scotttextor --body-file issue.md || true
