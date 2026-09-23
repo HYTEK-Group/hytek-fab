@@ -1,0 +1,179 @@
+name: migrations
+
+# ───────────────────────────────────────────────────────────────────────────
+# A MIGRATION IS APPLIED TO STAGING BY GITHUB, ON THE PULL REQUEST.
+#
+# Before 23/09/2026 a migration reached a database because a person typed a
+# command on their own PC, with an owner-level Supabase token sitting in a
+# file on that PC. That made one person the bottleneck, kept a powerful key on
+# a laptop, and let merged code sit ahead of the schema for as long as nobody
+# remembered (reference_hytek_code_ships_ahead_of_schema — caught live 19/09).
+#
+# This job removes the person from the loop for STAGING. Its sibling
+# migrate-live.yml does the same for the live database on merge.
+#
+# Job id "migrations" is a REQUIRED status check in branch protection, so it
+# has to run and report on EVERY pull request. When the pull request touches
+# no migration it says so and passes. DO NOT add a `paths:` filter — a
+# required check that never runs blocks the pull request for ever.
+#
+# It does not decide anything itself. Every judgement — has this already run,
+# was the file edited after it ran, is there a live change with no file in
+# git, has the shape moved without a migration — is the runner's, and the
+# runner's own words are what gets printed and posted.
+#
+# THE TOKEN is the repository Actions secret SUPABASE_MIGRATE_TOKEN. It is
+# handed to the runner through the environment and never echoed; GitHub masks
+# it in the log as well.
+# ───────────────────────────────────────────────────────────────────────────
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+# ONE AT A TIME PER DATABASE. Two pull requests in this repo never apply to
+# the same staging clone at once.
+#
+# Across REPOS this group cannot help — a GitHub concurrency group cannot span
+# repositories, and hytek-hub, hytek-detailing and hytek-install all migrate
+# the same SHARED database. That job is done by the runner itself: it claims
+# the gqtikz `coordination_lock` row before any SQL on the shared database and
+# releases it in a `finally`.
+concurrency:
+  group: migrate-staging-SHARED
+  cancel-in-progress: false
+
+env:
+  RUNNER: scripts/migrate.mjs
+  MIG_DIR: sql/migrations
+  DB_LABEL: SHARED
+
+jobs:
+  migrations:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      # The runner has no dependencies (node builtins + global fetch), so
+      # there is deliberately no `npm ci` here: a broken lockfile must not be
+      # able to stop a migration being checked.
+
+      - name: What does this pull request do to ${{ env.MIG_DIR }}?
+        id: changed
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          ALL=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR/files" --paginate \
+                  --jq '.[] | [.status, .filename] | @tsv' \
+                | awk -v d="$MIG_DIR/" '$2 ~ "^"d && $2 ~ /\.sql$/' || true)
+          if [ -z "$ALL" ]; then
+            echo "touched=no" >> "$GITHUB_OUTPUT"
+            echo "This pull request changes no migration — nothing to apply to staging." \
+              | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          echo "touched=yes" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Migrations in this pull request"
+            echo "$ALL" | awk '{print "- `" $2 "` (" $1 ")"}'
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "$ALL"
+
+      - name: What does the runner say about staging right now?
+        if: steps.changed.outputs.touched == 'yes'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_MIGRATE_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SUPABASE_ACCESS_TOKEN:-}" ]; then
+            echo "::error title=No migration token::This repository has no SUPABASE_MIGRATE_TOKEN Actions secret, so GitHub cannot apply migrations. Set it before merging anything with SQL in it."
+            exit 1
+          fi
+          node "$RUNNER" status --project staging 2>&1 | tee pre.txt
+          {
+            echo "### Staging before"
+            echo '```'
+            cat pre.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          # THE THREE DRIFTS THE RUNNER EXISTS TO CATCH. `up` refuses on the
+          # first two by itself; the third it only prints, so it is checked
+          # here as well. Nothing has been applied at this point.
+          if grep -qE '^  ORPHAN|^  EDITED|SHAPE CHANGED' pre.txt; then
+            echo "::error title=The staging database has drifted::Nothing was applied. ORPHAN = a live change with no file in git. EDITED = a file changed after it ran, so the database holds the old text. SHAPE CHANGED = SQL that did not come through the runner. Read the report in the job summary and reconcile it before this pull request can merge."
+            exit 1
+          fi
+
+      - name: Dry run against staging
+        if: steps.changed.outputs.touched == 'yes'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_MIGRATE_TOKEN }}
+        run: |
+          set -euo pipefail
+          node "$RUNNER" up --project staging --dry-run 2>&1 | tee dry.txt
+
+      - name: Apply to staging
+        id: apply
+        if: steps.changed.outputs.touched == 'yes'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_MIGRATE_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          # Everything pending goes on, not only this pull request's files:
+          # staging is a clone, and a staging clone that lags git makes the
+          # verify below meaningless. Already-applied files are skipped by the
+          # ledger, so re-running this job on a new push changes nothing.
+          node "$RUNNER" up --project staging \
+            --why "GitHub Actions: $GITHUB_REPOSITORY PR #$PR staging" 2>&1 | tee up.txt
+          node "$RUNNER" verify --project staging 2>&1 | tee verify.txt
+          {
+            echo "### Applied to staging"
+            echo '```'
+            cat up.txt
+            cat verify.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Say it on the pull request
+        if: always() && steps.changed.outputs.touched == 'yes'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+          OUTCOME: ${{ steps.apply.outcome }}
+        run: |
+          set -uo pipefail
+          # Only speak when there is something to say: applied, or failed.
+          if [ "$OUTCOME" = "success" ] && grep -q 'Nothing to apply' up.txt 2>/dev/null; then
+            echo "Nothing was applied and nothing failed — no comment."
+            exit 0
+          fi
+          {
+            if [ "$OUTCOME" = "success" ]; then
+              echo "### ✅ Applied to the ${DB_LABEL} staging database"
+            else
+              echo "### ❌ Could not apply to the ${DB_LABEL} staging database"
+              echo ""
+              echo "**Nothing merged and nothing on live.** The runner's own words:"
+            fi
+            echo ""
+            echo '```'
+            cat pre.txt up.txt verify.txt 2>/dev/null | tail -c 40000
+            echo '```'
+            echo ""
+            echo "_Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}_"
+          } > comment.md
+          gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body-file comment.md || true

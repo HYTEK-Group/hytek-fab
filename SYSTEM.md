@@ -211,4 +211,57 @@ exemptions:
     declare. Do not widen it to make a change pass — close the door instead, or
     raise it with the lane that owns it.
 
+## Migrations are applied by GitHub, not from a PC (23/09/2026)
+
+Until today a migration reached a database because somebody typed a command on
+their own PC, with an owner-level Supabase token in a file on that PC. That made
+one person the bottleneck, kept a powerful key on a laptop, and let merged code
+sit ahead of the schema — on 19/09/2026 production ran shipped code against a
+database without the columns it read.
+
+- `.github/workflows/migrate-staging.yml` — check id **`migrations`**, required in
+  branch protection. Runs on every pull request. If the pull request changes
+  nothing under `sql/migrations/` it says so and passes. If it does, it applies
+  everything pending to the **staging clone** and runs `verify`, so SQL that will
+  not apply turns the pull request red before it can merge.
+- `.github/workflows/migrate-live.yml` — on merge to `main`. It refuses
+  before touching anything if the runner reports an ORPHAN, an EDITED migration
+  or a CHANGED SHAPE. Otherwise: dry run, then **the migrations that merge
+  added**, in filename order, one `--only` at a time, then `verify --project
+  prod`. It posts the runner's own words back on the merged pull request and
+  opens an issue assigned to `scotttextor` if live does not end matching git.
+  Concurrency group `migrate-live-SHARED` means two merges in this repo never
+  apply at once; across repos (hub, detailing and install all migrate SHARED)
+  the runner's own gqtikz `coordination_lock` does the same job, because a
+  GitHub concurrency group cannot span repositories.
+
+It applies a merge's own files rather than a bare `up` on purpose: on 23/09/2026
+hytek-brain had a roles migration sitting deliberately unapplied on the shared
+database, and a bare `up` would have applied it on the first unrelated merge.
+Anything else pending is **named** in the comment and raises an issue — never
+applied by surprise, never left unsaid. The deliberate catch-up lever is
+Actions → *apply migrations to live* → Run workflow → `apply_all_pending = yes`.
+
+The token is the repository Actions secret `SUPABASE_MIGRATE_TOKEN`. It never
+appears in a log.
+
+**The emergency fallback**, for when GitHub Actions is unavailable and a
+migration cannot wait. It is the old route and it still works:
+
+```
+$env:SUPABASE_ACCESS_TOKEN = '<owner token>'
+$env:MIGRATE_ALLOW_PROD = '1'
+node scripts/migrate.mjs status  --project prod
+node scripts/migrate.mjs up      --project prod --only 0NN --dry-run
+node scripts/migrate.mjs up      --project prod --only 0NN --why "GitHub Actions down DD/MM/YYYY — applied by hand by <name>"
+node scripts/migrate.mjs verify  --project prod
+```
+
+`--only` is not optional: a bare `up` applies everything pending, including work
+another session is holding back. Every hand-applied migration carries a `--why`
+that says so, so `select name, note from schema_migrations where note like
+'GitHub Actions down%'` lists them. Re-run the workflow afterwards — the ledger
+makes it a no-op.
+
+
 Last checked: 17/09/2026 (front matter against the code by `npm run test:architecture`; the prose re-read against the files it names — the role key is live, and Sentry is wired).

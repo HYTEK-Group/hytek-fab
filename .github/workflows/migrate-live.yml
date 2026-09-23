@@ -1,0 +1,300 @@
+name: apply migrations to live
+
+# ───────────────────────────────────────────────────────────────────────────
+# THE LIVE DATABASE IS CHANGED BY GITHUB, ON MERGE — BY NOTHING ELSE.
+#
+# The failure this closes is written up in
+# reference_hytek_code_ships_ahead_of_schema: merging a pull request deploys
+# the CODE to production, and the migration does NOT go with it. On 19/09/2026
+# production ran shipped code against a database that did not have the columns
+# it read, because applying the migration was a separate act somebody had to
+# remember, on their own PC, with an owner-level Supabase token in a file on
+# that PC.
+#
+# WHAT IT APPLIES, AND WHAT IT DELIBERATELY DOES NOT
+#
+#   On a merge it applies THE MIGRATIONS THAT MERGE ADDED, in filename order,
+#   one `--only` at a time. It does NOT run a bare `up`. That is not caution
+#   for its own sake: on 23/09/2026 hytek-brain had a roles migration sitting
+#   deliberately unapplied on the live shared database, and a bare `up` would
+#   have applied it on the first unrelated merge. `--only <file>` is the same
+#   rule a human is told to follow after a merge, for the same reason.
+#
+#   Anything else the runner reports as pending is NOT applied quietly — it is
+#   named in the pull-request comment and it opens an issue. Nothing held back
+#   is applied by surprise; nothing left behind goes unsaid.
+#
+#   To apply a backlog on purpose, run this workflow by hand from the Actions
+#   tab with apply_all_pending = yes. That is the deliberate catch-up lever.
+#
+# WHAT IT REFUSES
+#   An ORPHAN (a live change with no file in git), an EDITED migration (the
+#   database ran text the file no longer contains) or a CHANGED SHAPE (SQL
+#   that never came through the runner) stops it before it touches anything,
+#   loudly, with the runner's own words.
+#
+# IT NEVER TOUCHES DATA. This workflow issues no SQL of its own: it runs the
+# migration runner and nothing else. What a migration file contains is that
+# file's business and the pull request's.
+#
+# IDEMPOTENT. A migration already in public.schema_migrations is never run
+# again — the runner skips it. Re-running this workflow on the same commit
+# applies nothing and says "Nothing to apply".
+# ───────────────────────────────────────────────────────────────────────────
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      apply_all_pending:
+        description: 'Apply EVERY pending migration to live, not just a merge’s own. Type yes.'
+        required: true
+        default: 'no'
+      why:
+        description: 'Why, in one line — it goes in the ledger note.'
+        required: true
+        default: 'manual catch-up from the Actions tab'
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+# ONE AT A TIME PER DATABASE. Two merges never apply at once.
+#
+# Across REPOS this group cannot help — a GitHub concurrency group cannot span
+# repositories, and hytek-hub, hytek-detailing and hytek-install all migrate
+# the same SHARED database. That job is done by the runner itself: it claims
+# the gqtikz `coordination_lock` row before any SQL on the shared database and
+# releases it in a `finally`.
+#
+# cancel-in-progress is FALSE and must stay false: cancelling a run that is
+# half way through a list of migrations is how a database ends up in a state
+# no file describes.
+concurrency:
+  group: migrate-live-SHARED
+  cancel-in-progress: false
+
+env:
+  RUNNER: scripts/migrate.mjs
+  MIG_DIR: sql/migrations
+  DB_LABEL: SHARED
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Which migrations did this merge add?
+        id: changed
+        env:
+          BEFORE: ${{ github.event.before }}
+          MODE: ${{ github.event_name }}
+          ALL: ${{ github.event.inputs.apply_all_pending }}
+        run: |
+          set -euo pipefail
+          if [ "$MODE" = "workflow_dispatch" ]; then
+            if [ "$ALL" != "yes" ]; then
+              echo "::error title=Nothing asked for::Run this by hand only with apply_all_pending = yes."
+              exit 1
+            fi
+            echo "mode=all" >> "$GITHUB_OUTPUT"
+            echo "touched=yes" >> "$GITHUB_OUTPUT"
+            echo "Manual run: every pending migration on live will be applied." \
+              | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          B="$BEFORE"
+          if [ -z "$B" ] || [ "$B" = "0000000000000000000000000000000000000000" ] \
+             || ! git cat-file -e "$B^{commit}" 2>/dev/null; then
+            B=$(git rev-parse "$GITHUB_SHA^") || B=""
+          fi
+          if [ -z "$B" ]; then
+            FILES=""
+          else
+            FILES=$(git diff --name-only --diff-filter=ACMR "$B" "$GITHUB_SHA" -- "$MIG_DIR" \
+                    | grep -E '\.sql$' | sed 's#.*/##' | sort || true)
+          fi
+          if [ -z "$FILES" ]; then
+            echo "mode=none" >> "$GITHUB_OUTPUT"
+            echo "touched=no" >> "$GITHUB_OUTPUT"
+            echo "This merge added no migration — the live database is not touched." \
+              | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          echo "mode=merge" >> "$GITHUB_OUTPUT"
+          echo "touched=yes" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$FILES" > merged.txt
+          {
+            echo "### Migrations this merge added"
+            sed 's/^/- `/; s/$/`/' merged.txt
+          } >> "$GITHUB_STEP_SUMMARY"
+          cat merged.txt
+
+      - name: What does the runner say about live right now?
+        if: steps.changed.outputs.touched == 'yes'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_MIGRATE_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SUPABASE_ACCESS_TOKEN:-}" ]; then
+            echo "::error title=No migration token::This repository has no SUPABASE_MIGRATE_TOKEN Actions secret, so GitHub cannot apply migrations to live."
+            exit 1
+          fi
+          # `status` is read-only on production — the runner creates nothing
+          # there for a read-only command.
+          node "$RUNNER" status --project prod 2>&1 | tee pre.txt
+          {
+            echo "### Live before"
+            echo '```'
+            cat pre.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if grep -qE '^  ORPHAN|^  EDITED|SHAPE CHANGED' pre.txt; then
+            echo "::error title=THE LIVE DATABASE HAS DRIFTED — NOTHING APPLIED::ORPHAN = a live change with no file in git. EDITED = a file changed after it ran, so the database holds text no file describes. SHAPE CHANGED = SQL that never came through the runner. This is a live incident, not paperwork. Read the report in the job summary."
+            exit 1
+          fi
+
+      - name: Work out what to apply
+        id: plan
+        if: steps.changed.outputs.touched == 'yes'
+        env:
+          MODE: ${{ steps.changed.outputs.mode }}
+        run: |
+          set -euo pipefail
+          sed -n 's#^  PENDING   .*/##p' pre.txt | sort > pending.txt
+          if [ "$MODE" = "all" ]; then
+            cp pending.txt todo.txt
+            : > left.txt
+          else
+            comm -12 pending.txt merged.txt > todo.txt
+            comm -23 pending.txt merged.txt > left.txt
+          fi
+          echo "todo=$(wc -l < todo.txt)" >> "$GITHUB_OUTPUT"
+          echo "left=$(wc -l < left.txt)" >> "$GITHUB_OUTPUT"
+          echo "PENDING ON LIVE:"; cat pending.txt
+          echo "TO APPLY NOW:";    cat todo.txt
+          echo "LEFT BEHIND:";     cat left.txt
+
+      - name: Dry run against live
+        if: steps.changed.outputs.touched == 'yes' && steps.plan.outputs.todo != '0'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_MIGRATE_TOKEN }}
+          MIGRATE_ALLOW_PROD: '1'
+        run: |
+          set -euo pipefail
+          : > dry.txt
+          while read -r f; do
+            [ -z "$f" ] && continue
+            node "$RUNNER" up --project prod --only "$f" --dry-run 2>&1 | tee -a dry.txt
+          done < todo.txt
+
+      - name: Apply to live
+        id: apply
+        if: steps.changed.outputs.touched == 'yes' && steps.plan.outputs.todo != '0'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_MIGRATE_TOKEN }}
+          MIGRATE_ALLOW_PROD: '1'
+          WHY_IN: ${{ github.event.inputs.why }}
+        run: |
+          set -euo pipefail
+          WHY="${WHY_IN:-}"
+          [ -n "$WHY" ] || WHY="merged to ${GITHUB_REF_NAME} as ${GITHUB_SHA}"
+          : > up.txt
+          while read -r f; do
+            [ -z "$f" ] && continue
+            node "$RUNNER" up --project prod --only "$f" \
+              --why "GitHub Actions: $WHY" 2>&1 | tee -a up.txt
+          done < todo.txt
+
+      - name: Verify live
+        id: verify
+        if: always() && steps.changed.outputs.touched == 'yes'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_MIGRATE_TOKEN }}
+        run: |
+          set -euo pipefail
+          node "$RUNNER" verify --project prod 2>&1 | tee verify.txt
+
+      - name: Say it on the pull request this merge came from
+        if: always() && steps.changed.outputs.touched == 'yes'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          A: ${{ steps.apply.outcome }}
+          V: ${{ steps.verify.outcome }}
+          TODO: ${{ steps.plan.outputs.todo }}
+          LEFT: ${{ steps.plan.outputs.left }}
+        run: |
+          set -uo pipefail
+          {
+            if [ "$V" = "success" ] && [ "$A" != "failure" ]; then
+              if [ "${TODO:-0}" = "0" ]; then
+                echo "### ✅ Nothing pending on the ${DB_LABEL} live database"
+              else
+                echo "### ✅ Applied to the ${DB_LABEL} live database"
+              fi
+            else
+              echo "### ❌ The ${DB_LABEL} live database did NOT end clean"
+            fi
+            echo ""
+            if [ "${LEFT:-0}" != "0" ]; then
+              echo "> ⚠️ **$LEFT migration(s) are pending on live that this merge did not add.**"
+              echo "> They were **not** applied — this workflow only applies a merge's own files,"
+              echo "> so nothing another session is deliberately holding back is applied by surprise."
+              echo "> To apply them on purpose: Actions → *apply migrations to live* → Run workflow →"
+              echo "> \`apply_all_pending = yes\`."
+              echo ""
+              sed 's/^/> - `/; s/$/`/' left.txt
+              echo ""
+            fi
+            echo "The runner's own words:"
+            echo ""
+            echo '```'
+            cat up.txt verify.txt 2>/dev/null | tail -c 40000
+            echo '```'
+            echo ""
+            echo "_Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}_"
+          } > comment.md
+          cat comment.md >> "$GITHUB_STEP_SUMMARY"
+          PR=$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls" --jq '.[0].number' 2>/dev/null || true)
+          if [ -n "${PR:-}" ] && [ "$PR" != "null" ]; then
+            gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body-file comment.md || true
+          else
+            echo "No pull request found for $GITHUB_SHA — the report is in the job summary only."
+          fi
+
+      - name: Open an issue for Scott
+        if: failure() || (steps.changed.outputs.touched == 'yes' && steps.plan.outputs.left != '0')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -uo pipefail
+          {
+            echo "The **apply migrations to live** workflow did not leave the ${DB_LABEL} live"
+            echo "database matching git."
+            echo ""
+            echo "- Repo: \`$GITHUB_REPOSITORY\`"
+            echo "- Commit: \`$GITHUB_SHA\`"
+            echo "- Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            echo ""
+            echo "**Until this is cleared, merged code may be running against a database that does**"
+            echo "**not have the shape it expects.** That is the 19/09/2026 fault, not paperwork."
+            echo ""
+            echo "The runner's own words:"
+            echo ""
+            echo '```'
+            cat pre.txt up.txt verify.txt 2>/dev/null | tail -c 40000
+            echo '```'
+          } > issue.md
+          gh issue create --repo "$GITHUB_REPOSITORY" \
+            --title "Live migrations: ${DB_LABEL} did not end clean ($GITHUB_SHA)" \
+            --assignee scotttextor --body-file issue.md || true
