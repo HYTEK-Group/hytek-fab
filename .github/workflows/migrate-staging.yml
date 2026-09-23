@@ -102,6 +102,17 @@ jobs:
             echo "::error title=No migration token::This repository has no SUPABASE_MIGRATE_TOKEN Actions secret, so GitHub cannot apply migrations. Set it before merging anything with SQL in it."
             exit 1
           fi
+          # THE TOKEN MUST BE CLEAN, AND THIS SAYS SO IN ENGLISH.
+          # `gh secret set` fed from a PowerShell pipe writes a byte-order mark
+          # in front of the value. The runner then puts it in an HTTP header and
+          # node says "Cannot convert argument to a ByteString because the
+          # character at index 7 has a value of 65279" — which tells nobody
+          # anything. Measured 23/09/2026 on the first real run. grep prints
+          # nothing, so the value never reaches the log.
+          if ! printf '%s' "$SUPABASE_ACCESS_TOKEN" | grep -qE '^sbp_[0-9a-f]+$'; then
+            echo "::error title=The migration token is not clean::SUPABASE_MIGRATE_TOKEN is not a bare Supabase management token (sbp_ then hex, nothing else). A byte-order mark or a trailing newline is the usual cause: setting the secret from a PowerShell pipe adds one. Re-set it from a file with no BOM: gh secret set SUPABASE_MIGRATE_TOKEN --repo <repo> < token.txt"
+            exit 1
+          fi
           node "$RUNNER" status --project staging 2>&1 | tee pre.txt
           {
             echo "### Staging before"
@@ -155,7 +166,14 @@ jobs:
           PR: ${{ github.event.pull_request.number }}
           OUTCOME: ${{ steps.apply.outcome }}
         run: |
+          # `set +e` DELIBERATELY. GitHub runs a `run:` block with `bash -e`, and
+          # `set -uo pipefail` does not turn that off — so a `cat` of a file an
+          # earlier step never got as far as writing killed this step and the
+          # whole run went red AFTER a clean apply. The reporting step must never
+          # be able to fail the thing it is reporting on. Measured 23/09/2026.
+          set +e
           set -uo pipefail
+          touch pre.txt up.txt verify.txt
           # Only speak when there is something to say: applied, or failed.
           if [ "$OUTCOME" = "success" ] && grep -q 'Nothing to apply' up.txt 2>/dev/null; then
             echo "Nothing was applied and nothing failed — no comment."
