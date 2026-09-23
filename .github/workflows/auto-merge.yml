@@ -39,6 +39,8 @@ permissions:
   contents: write
   pull-requests: write
   checks: read
+  # To start "apply migrations to live" for the merge this job makes (below).
+  actions: write
 
 jobs:
   merge-on-green:
@@ -84,3 +86,28 @@ jobs:
           fi
           echo "Tests and architecture green on PR #$PR_NUMBER @ $HEAD_SHA — merging."
           gh pr merge --squash --repo "$REPO" "$PR_NUMBER"
+
+          # THE MERGE ABOVE STARTS NO WORKFLOW (23/09/2026). It is pushed with
+          # GITHUB_TOKEN, and GitHub never runs a `push` workflow for that — so
+          # "apply migrations to live" did not run for any auto-merged pull
+          # request (hytek-hub #641: migration 084 sat unapplied on live). A
+          # dispatch is the one event this token may start, so start it here,
+          # naming the exact merge commit. It applies only that commit's own
+          # migrations, and says "added no migration" for everything else.
+          MERGE_SHA=""
+          for i in 1 2 3 4 5; do
+            MERGE_SHA=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json mergeCommit --jq '.mergeCommit.oid // ""' || true)
+            [ -n "$MERGE_SHA" ] && break
+            sleep 3
+          done
+          if [ -z "$MERGE_SHA" ]; then
+            echo "::error title=Merged, but live migrations were NOT started::PR #$PR_NUMBER merged but its merge commit could not be read, so apply-migrations-to-live was not started. Run it by hand from the Actions tab."
+            exit 1
+          fi
+          if ! gh workflow run migrate-live.yml --repo "$REPO" --ref "${{ github.event.repository.default_branch }}" \
+               -f apply_all_pending=no -f merge_sha="$MERGE_SHA" \
+               -f why="auto-merged PR #$PR_NUMBER as $MERGE_SHA"; then
+            echo "::error title=Merged, but live migrations were NOT started::PR #$PR_NUMBER merged as $MERGE_SHA but apply-migrations-to-live could not be started. Run it by hand from the Actions tab."
+            exit 1
+          fi
+          echo "Started apply-migrations-to-live for $MERGE_SHA."
