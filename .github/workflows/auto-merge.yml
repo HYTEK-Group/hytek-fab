@@ -16,16 +16,29 @@
 # below then asks the API for BOTH check-runs on the head commit and exits quietly
 # unless both are `success`. So whichever finishes second does the merging, and a
 # green tests run alone can no longer merge a PR that adds a side door.
+# 23/09/2026: THREE gates, not two. "migrations" joined them — the check that
+# applies a pull request's SQL to the staging database and runs the runner's
+# own verify. Without it here, a pull request carrying a migration would
+# auto-merge the moment tests and architecture went green, i.e. before
+# anything had proved the SQL applies, and the live apply on merge would be
+# the first attempt. The "migrations" check runs on EVERY pull request and
+# passes immediately when there is no SQL in it, so nothing waits for a gate
+# that never reports.
 name: Auto-merge
 
 on:
   workflow_run:
-    workflows: ["PR tests", "architecture"]
+    workflows: ["PR tests", "architecture", "migrations"]
     types: [completed]
 
+# `checks: read` is load-bearing: an explicit permissions block grants
+# nothing it does not name, so without it the check-runs API below answers
+# "Resource not accessible by integration (HTTP 403)" and this job goes
+# GREEN having merged nothing. Measured on hytek-hub PR #637, 23/09/2026.
 permissions:
   contents: write
   pull-requests: write
+  checks: read
 
 jobs:
   merge-on-green:
@@ -44,7 +57,16 @@ jobs:
           # BOTH required checks must be green on this exact commit. Whichever
           # workflow finishes second finds two successes here and merges; the
           # first one to finish exits quietly.
-          JQ_BOTH='[.check_runs[] | select(.name=="tests" or .name=="architecture") | .conclusion] | length==2 and all(.=="success")'
+          JQ_BOTH='[.check_runs[] | select(.name=="tests" or .name=="architecture" or .name=="migrations") | .conclusion] | length==3 and all(.=="success")'
+          # A FAILED CALL IS NOT "NOT READY YET". The gate below pipes the API into
+          # a grep and treats anything else as "still waiting", so a 403 from a
+          # missing permission reads exactly like a check that has not reported:
+          # green job, nothing merged, nothing said. Measured on hytek-hub PR #637,
+          # 23/09/2026. Prove the call works before believing its answer.
+          gh api "repos/$GITHUB_REPOSITORY/commits/$HEAD_SHA/check-runs" --jq '.total_count' > /dev/null || {
+            echo "::error title=Could not read the checks::The check-runs API did not answer, so whether the gates are green is unknown. Nothing was merged. This is a broken auto-merge, not a pull request waiting."
+            exit 1
+          }
           OK=$(gh api "repos/$REPO/commits/$HEAD_SHA/check-runs" --jq "$JQ_BOTH")
           if [ "$OK" != "true" ]; then
             echo "Waiting for the other check — tests and architecture must both be green."
