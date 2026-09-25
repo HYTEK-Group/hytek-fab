@@ -84,6 +84,18 @@ jobs:
             echo "No open non-draft PR with head $HEAD_SHA — nothing to merge."
             exit 0
           fi
+          # LABELLED, NOT JUST GREEN (Scott, 25/09/2026). Green used to be
+          # enough, and twice in one day that was too much: hytek-invoicing
+          # #97 shipped a money-facing change nobody had pressed a button
+          # on, and hytek-hub #657 merged five minutes before the last
+          # commit on its branch was pushed, leaving the office server
+          # ahead of main. This workflow was written when these repos had
+          # no branch protection at all; they have it now. So a person says
+          # when: put the `auto-merge` label on the pull request.
+          if [ "$(gh pr view "$PR_NUMBER" --repo "$REPO" --json labels --jq '[.labels[].name] | index("auto-merge") != null')" != "true" ]; then
+            echo "PR #$PR_NUMBER is green but carries no 'auto-merge' label — leaving it for a person to merge."
+            exit 0
+          fi
           echo "Tests and architecture green on PR #$PR_NUMBER @ $HEAD_SHA — merging."
           gh pr merge --squash --repo "$REPO" "$PR_NUMBER"
 
