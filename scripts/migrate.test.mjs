@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url'
 import {
   main, sha, quote, readPassport, resolveTarget, discoverIn, diffObjects,
   classify, transactional, PROD_REFS, SHARED_REFS, ExitSignal, LEDGER_DDL, isUntransactioned,
-  FINGERPRINT_SQL,
+  FINGERPRINT_SQL, KNOWN_DUPLICATE_NUMBERS, duplicateNumbers,
 } from './migrate.mjs'
 
 const STG = 'lvjxqygftugmcadstpff'
@@ -782,7 +782,7 @@ describe('grant fingerprint reads pg_class.relacl, not information_schema (D104)
 // Windows machine while the app repos check out LF, so comparing raw bytes
 // reports drift in every repo, every time, while the git blobs are identical —
 // a check that cries wolf weekly is a check that gets ignored within a month.
-const CANONICAL_RUNNER_SHA256 = '1a1ff6f081d72d87334f7518f3f6f8bf43005c0cf86364304e1d42230a0fe48e'
+const CANONICAL_RUNNER_SHA256 = 'aa587c482aa9726a7cc49819194941ac45937730a99f2784c156bd101741f4da'
 
 describe('the vendored runner is byte-identical to hytek-brain/tool/migrate.mjs', () => {
   it('matches the canonical hash — if this fails, do NOT edit the hash to match', () => {
@@ -797,5 +797,106 @@ describe('the vendored runner is byte-identical to hytek-brain/tool/migrate.mjs'
         'Three repos each fixed the same bug in their own copy and the canonical ' +
         'one stayed broken — this test exists so that cannot happen quietly again.',
     ).toBe(CANONICAL_RUNNER_SHA256)
+  })
+})
+
+describe('two migrations that share a number', () => {
+  const asRepo = (app) => fs.writeFileSync(path.join(root, 'SYSTEM.md'), PASSPORT.replace('app: test-repo', `app: ${app}`))
+
+  it('sorts shared numbers into pinned history and new clashes', () => {
+    const files = ['095-a.sql', '095-b.sql', '096-c.sql'].map(name => ({ name }))
+    const known = { 'r': { '095': ['095-a.sql', '095-b.sql'] } }
+    expect(duplicateNumbers(files, 'r', known)).toEqual({ pinned: [{ num: '095', names: ['095-a.sql', '095-b.sql'], unpinned: [] }], fresh: [] })
+    expect(duplicateNumbers(files, 'other-repo', known).fresh).toEqual([{ num: '095', names: ['095-a.sql', '095-b.sql'], unpinned: ['095-a.sql', '095-b.sql'] }])
+  })
+
+  it('pins by file NAME, so a third file on a pinned number is still a clash', () => {
+    const files = ['095-a.sql', '095-b.sql', '095-new.sql'].map(name => ({ name }))
+    const d = duplicateNumbers(files, 'r', { 'r': { '095': ['095-a.sql', '095-b.sql'] } })
+    expect(d.pinned).toEqual([])
+    expect(d.fresh[0].unpinned).toEqual(['095-new.sql'])
+  })
+
+  it('every pinned pair really is a pair on one number', () => {
+    for (const [repo, nums] of Object.entries(KNOWN_DUPLICATE_NUMBERS)) {
+      for (const [num, names] of Object.entries(nums)) {
+        expect(names.length, `${repo} ${num}`).toBeGreaterThanOrEqual(2)
+        for (const n of names) expect(n.startsWith(`${num}-`), `${repo} ${n}`).toBe(true)
+      }
+    }
+    expect(KNOWN_DUPLICATE_NUMBERS['hytek-hub']['095']).toEqual(['095-lgs-floor-and-roof-metres.sql', '095-planner-deal-feed.sql'])
+  })
+
+  it('status warns loudly about a new clash', async () => {
+    write('001-a.sql', 'select 1;')
+    write('001-b.sql', 'select 2;')
+    const r = await run(['status'])
+    expect(r.out).toContain('TWO MIGRATIONS SHARE THE NUMBER 001: 001-a.sql, 001-b.sql')
+  })
+
+  it('verify prints the warning even though it is otherwise silent', async () => {
+    write('001-a.sql', 'select 1;')
+    write('001-b.sql', 'select 2;')
+    const r = await run(['verify'])
+    expect(r.err).toContain('TWO MIGRATIONS SHARE THE NUMBER 001')
+  })
+
+  it('up REFUSES a new clash and sends none of its SQL', async () => {
+    write('001-a.sql', 'create table a();')
+    write('001-b.sql', 'create table b();')
+    const api = fakeApi()
+    const r = await run(['up'], { api })
+    expect(r.exitCode).toBe(1)
+    expect(r.err).toContain('refusing to apply 001-a.sql, 001-b.sql')
+    const sql = api.sql.join('\n')
+    expect(sql).not.toContain('create table a();')
+    expect(sql).not.toContain('create table b();')
+    expect(sql).not.toMatch(/insert into public\.schema_migrations/)
+  })
+
+  it('up refuses the NEW file even when its twin is already applied', async () => {
+    write('001-a.sql', 'create table a();')
+    write('001-b.sql', 'create table b();')
+    const api = fakeApi({ ledger: [{ name: '001-a.sql', checksum: sha('create table a();'), applied_at: '2026-09-01', applied_by: 'x', source: 'runner' }] })
+    const r = await run(['up'], { api })
+    expect(r.exitCode).toBe(1)
+    expect(r.err).toContain('refusing to apply 001-b.sql')
+    expect(api.sql.join('\n')).not.toContain('create table b();')
+  })
+
+  it('still applies other pending files when the clash is already applied history', async () => {
+    write('001-a.sql', 'create table a();')
+    write('001-b.sql', 'create table b();')
+    write('002-c.sql', 'create table c();')
+    const done = (n, b) => ({ name: n, checksum: sha(b), applied_at: '2026-09-01', applied_by: 'x', source: 'runner' })
+    const api = fakeApi({ ledger: [done('001-a.sql', 'create table a();'), done('001-b.sql', 'create table b();')] })
+    const r = await run(['up'], { api })
+    expect(r.exitCode).toBe(null)
+    expect(r.out).toContain('TWO MIGRATIONS SHARE THE NUMBER 001')
+    expect(r.out).toContain('applied 002-c.sql')
+  })
+
+  it('the pinned hub 095 pair is quiet and applies (a fresh staging clone)', async () => {
+    asRepo('hytek-hub')
+    write('095-lgs-floor-and-roof-metres.sql', 'create table l();')
+    write('095-planner-deal-feed.sql', 'create table p();')
+    const api = fakeApi()
+    const r = await run(['up'], { api })
+    expect(r.exitCode).toBe(null)
+    expect(r.out).not.toContain('SHARE THE NUMBER')
+    expect(r.out).toContain('applied 095-lgs-floor-and-roof-metres.sql')
+    expect(r.out).toContain('applied 095-planner-deal-feed.sql')
+  })
+
+  it('a third 095 in the hub is refused', async () => {
+    asRepo('hytek-hub')
+    write('095-lgs-floor-and-roof-metres.sql', 'create table l();')
+    write('095-planner-deal-feed.sql', 'create table p();')
+    write('095-another.sql', 'create table x();')
+    const api = fakeApi()
+    const r = await run(['up'], { api })
+    expect(r.exitCode).toBe(1)
+    expect(r.err).toContain('refusing to apply 095-another.sql')
+    expect(api.sql.join('\n')).not.toMatch(/create table [lpx]\(\)/)
   })
 })

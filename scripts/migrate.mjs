@@ -190,6 +190,45 @@ export function discoverIn(root, dir) {
     })
 }
 
+/** TWO FILES, ONE NUMBER — the historical pairs, pinned by exact file name.
+ *
+ *  Two sessions working at once each take "the next free number" and both
+ *  merge. It happened in hytek-hub on 28/09/2026 (095-planner-deal-feed and
+ *  095-lgs-floor-and-roof-metres, D111) and nothing noticed: the runner orders
+ *  by NAME, so which one runs first is decided by the slug, and `--only 095`
+ *  selects both. Every pair below was already merged when the guard arrived,
+ *  so renumbering one now would make an applied file read as pending and its
+ *  old name as an orphan. They are history; they stay, by name.
+ *
+ *  A NEW pair is refused by `up` and shouted by `status` and `verify`. Pinned
+ *  by file name, not by number, so a third 095 in hytek-hub is still refused.
+ *  Adding a pair here is a rule-file change for Scott, never a way round a
+ *  refusal — renumber the file that has not been applied anywhere instead. */
+export const KNOWN_DUPLICATE_NUMBERS = Object.freeze({
+  'hytek-hub': { '095': ['095-lgs-floor-and-roof-metres.sql', '095-planner-deal-feed.sql'] },
+  'hytek-install': { '001': ['001-customer-grant-prune-fn.sql', '001-install-pin-hash.sql'] },
+  'hytek-purchasing': { '506': ['506-replace-stock-catalogue.sql', '506-template-items-extra-defaults.sql'] },
+})
+
+/** Files that share a three-digit number. `pinned` are the known historical
+ *  pairs; `fresh` are any other, with `unpinned` naming the files at fault. */
+export function duplicateNumbers(files, repo, known = KNOWN_DUPLICATE_NUMBERS) {
+  const byNum = new Map()
+  for (const f of files) {
+    const num = f.name.slice(0, 3)
+    if (!byNum.has(num)) byNum.set(num, [])
+    byNum.get(num).push(f.name)
+  }
+  const pinned = [], fresh = []
+  for (const [num, names] of byNum) {
+    if (names.length < 2) continue
+    const allowed = new Set(known[repo]?.[num] ?? [])
+    const unpinned = names.filter(n => !allowed.has(n))
+    ;(unpinned.length ? fresh : pinned).push({ num, names, unpinned })
+  }
+  return { pinned, fresh }
+}
+
 export function diffObjects(before, after) {
   const added = [], removed = [], changed = []
   for (const k of Object.keys(after)) {
@@ -524,14 +563,26 @@ export async function main(argv, env, io = {}) {
     // IS the truth and a warning that keeps shouting is one that gets ignored --
     // which is the failure mode this whole programme exists to end.
     carry.stranded = c.pending.filter((f) => carry.ids.has(f.name)).map((f) => f.name)
-    return { files, present, ...c, shape, carry }
+    return { files, present, ...c, shape, carry, dupes: duplicateNumbers(files, REPO) }
   }
 
   // commands ------------------------------------------------------------------
+  /** Loud on purpose, and printed even by the otherwise-silent `verify`: a
+   *  shared number is visible in git before anything reaches a database. */
+  function warnDuplicates(dupes, say) {
+    for (const d of dupes.fresh) {
+      say(`  ⚠ TWO MIGRATIONS SHARE THE NUMBER ${d.num}: ${d.names.join(', ')}`)
+      say(`    Two sessions each took the next free number. The runner orders by name, so which runs first is an accident of the slug.`)
+      say(`    Renumber ${d.unpinned.join(', ')} to the next free number before it is applied anywhere; \`up\` refuses to apply it until then.`)
+    }
+    if (dupes.fresh.length) say('')
+  }
+
   async function status(quiet = false) {
     const s = await inspect()
     const say = (...a) => { if (!quiet) out(...a) }
     say(`\n  ${REPO} → ${alias} (${ref})${isProd ? '  [PRODUCTION — read only]' : ''}`)
+    warnDuplicates(s.dupes, say)
     if (!s.present) { say(`  no schema_migrations on this project yet. Lane 13 creates it at cutover.\n`); return s }
     say(`  ${s.applied.length} applied · ${s.pending.length} pending · ${s.edited.length} edited-after-applying · ${s.orphans.length} applied-but-not-in-git\n`)
     if (s.carry?.stranded?.length) {
@@ -567,6 +618,7 @@ export async function main(argv, env, io = {}) {
    *  nightly cron run. One line when everything is true. */
   async function verify() {
     const s = await status(true)
+    warnDuplicates(s.dupes, errOut)
     const problems = []
     if (!s.present) problems.push('no schema_migrations table on this project')
     if (s.pending.length) problems.push(`${s.pending.length} migration(s) in git are not applied: ${s.pending.map(f => f.name).join(', ')}`)
@@ -610,6 +662,13 @@ export async function main(argv, env, io = {}) {
       todo = s.pending.filter(f => f.name === only || (num !== null && f.name.startsWith(num)))
       if (!todo.length) die(s.done.has(only) ? `${only} has already been applied.` : `${only} is not a pending migration.`)
     }
+    // A NEW shared number stops the run before anything is applied or locked.
+    const clash = s.dupes.fresh.flatMap(d => d.unpinned.filter(n => todo.some(f => f.name === n)).map(n => ({ n, d })))
+    if (clash.length) die(
+      `refusing to apply ${clash.map(c => c.n).join(', ')}: its number is shared with another migration in this repo.\n` +
+      [...new Set(clash.map(c => c.d))].map(d => `      ${d.num}: ${d.names.join(', ')}`).join('\n') +
+      `\n    Renumber the file that has not been applied anywhere to the next free number, then run up again. Nothing was applied.` +
+      `\n    The historical pairs are pinned in KNOWN_DUPLICATE_NUMBERS in hytek-brain/tool/migrate.mjs (a rule file).`)
     if (!todo.length) { out('  Nothing to apply.\n'); return }
     if (dryRun) { out(`  --dry-run: would apply ${todo.length} migration(s), changing nothing.\n`); return }
 
