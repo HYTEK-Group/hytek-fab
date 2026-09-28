@@ -14,6 +14,7 @@ import { fileURLToPath } from 'node:url'
 import {
   main, sha, quote, readPassport, resolveTarget, discoverIn, diffObjects,
   classify, transactional, PROD_REFS, SHARED_REFS, ExitSignal, LEDGER_DDL, isUntransactioned,
+  FINGERPRINT_SQL,
 } from './migrate.mjs'
 
 const STG = 'lvjxqygftugmcadstpff'
@@ -641,6 +642,122 @@ describe('a renamed pre-Lane-2 ledger is never silently treated as "nothing appl
   })
 })
 
+// ── grants are read the same whoever runs the runner (D104, 28/09/2026) ─────
+//
+// The grant branch used information_schema.role_table_grants, which only lists
+// grants the CURRENT role takes part in. Under supabase_read_only_user it saw
+// none, and `status` reported 891 objects "changed" on PLANNER when nothing had.
+// It now reads pg_class.relacl through aclexplode. The rule for that change:
+// for every grant a SUPERUSER saw through the view, the new branch must produce
+// the SAME key, or every recorded fingerprint drifts and needs a mass re-accept.
+//
+// The fixture below is a small `public` schema whose ACLs cover each case that
+// could make the two differ. `viewAsSuperuser` is information_schema.table_privileges
+// as Postgres 17 defines it (src/backend/catalog/information_schema.sql),
+// seen by a superuser, then filtered the way the OLD branch filtered it.
+// `newBranch` applies the filters parsed out of the SHIPPED FINGERPRINT_SQL, so
+// editing the SQL (a relkind, a privilege word, a role) changes this test's result.
+
+const ACL_LETTERS = { r: 'SELECT', a: 'INSERT', w: 'UPDATE', d: 'DELETE', D: 'TRUNCATE', x: 'REFERENCES', t: 'TRIGGER', m: 'MAINTAIN', U: 'USAGE' }
+
+/** aclexplode(): '{anon=arw/postgres,=r/postgres}' → one row per privilege. '' grantee = PUBLIC (oid 0). */
+function aclexplode(acl) {
+  return acl.replace(/^\{|\}$/g, '').split(',').filter(Boolean).flatMap((item) => {
+    const [grantee, rest] = item.split('=')
+    const [privs, grantor] = rest.split('/')
+    return [...privs.replace(/\*/g, '')].map((ch) => ({ grantee: grantee || 'PUBLIC', grantor, privilege_type: ACL_LETTERS[ch] }))
+  })
+}
+/** acldefault('r', owner) on Postgres 17: the owner holds everything, MAINTAIN included. */
+const acldefault = (owner) => `{${owner}=arwdDxtm/${owner}}`
+
+const GRANT_FIXTURE = [
+  // ordinary table: the three API roles, two grantors for one privilege, a PUBLIC grant, MAINTAIN in the ACL
+  { nsp: 'public', relname: 'jobs', relkind: 'r', owner: 'postgres',
+    acl: '{postgres=arwdDxtm/postgres,anon=r/postgres,authenticated=arwd/postgres,authenticated=r/supabase_admin,service_role=arwdDxtm/postgres,=r/postgres,app_hub=rw/postgres}' },
+  // grant option (*) on a privilege
+  { nsp: 'public', relname: 'quotes', relkind: 'r', owner: 'postgres', acl: '{postgres=arwdDxtm/postgres,service_role=r*w*/postgres}' },
+  // never granted: NULL relacl falls back to the owner's default
+  { nsp: 'public', relname: 'fresh', relkind: 'r', owner: 'postgres', acl: null },
+  // NULL relacl on a table an API role OWNS: the default ACL gives it every privilege
+  { nsp: 'public', relname: 'owned_by_service', relkind: 'r', owner: 'service_role', acl: null },
+  { nsp: 'public', relname: 'jobs_safe', relkind: 'v', owner: 'postgres', acl: '{postgres=arwdDxtm/postgres,anon=r/postgres,authenticated=r/postgres}' },
+  { nsp: 'public', relname: 'events', relkind: 'p', owner: 'postgres', acl: '{postgres=arwdDxtm/postgres,authenticated=ar/postgres}' },
+  { nsp: 'public', relname: 'ext_rates', relkind: 'f', owner: 'postgres', acl: '{postgres=arwdDxtm/postgres,anon=r/postgres}' },
+  // kinds the view never lists: sequence, materialised view, index
+  { nsp: 'public', relname: 'jobs_id_seq', relkind: 'S', owner: 'postgres', acl: '{postgres=rwU/postgres,anon=rwU/postgres}' },
+  { nsp: 'public', relname: 'weekly_mv', relkind: 'm', owner: 'postgres', acl: '{postgres=arwdDxtm/postgres,authenticated=r/postgres}' },
+  // another schema: never in the fingerprint
+  { nsp: 'auth', relname: 'users', relkind: 'r', owner: 'supabase_auth_admin', acl: '{supabase_auth_admin=arwdDxtm/supabase_auth_admin,service_role=arwd/supabase_auth_admin}' },
+]
+const explodeAll = (fixture) => fixture.flatMap((c) =>
+  aclexplode(c.acl ?? acldefault(c.owner)).map((a) => ({ ...c, ...a })))
+
+/** The OLD branch as a superuser saw it: table_privileges' own filters, then the fingerprint's. */
+function viewAsSuperuser(fixture) {
+  return explodeAll(fixture)
+    .filter((r) => ['r', 'v', 'f', 'p'].includes(r.relkind))
+    .filter((r) => ['INSERT', 'SELECT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER'].includes(r.privilege_type))
+    .filter((r) => r.nsp === 'public' && ['anon', 'authenticated', 'service_role'].includes(r.grantee))
+    .map((r) => `grant|${r.relname}.${r.grantee}.${r.privilege_type}`)
+}
+
+const grantBranch = () => {
+  const m = /select 'grant'[\s\S]*?(?=\nunion all)/.exec(FINGERPRINT_SQL)
+  if (!m) throw new Error('no grant branch in FINGERPRINT_SQL')
+  return m[0]
+}
+const inList = (sql, column) => {
+  const m = new RegExp(`${column.replace('.', '\\.')} in \\(([^)]*)\\)`).exec(sql)
+  if (!m) throw new Error(`no "${column} in (…)" in the grant branch`)
+  return m[1].split(',').map((s) => s.trim().replace(/^'|'$/g, ''))
+}
+
+/** The NEW branch: the same exploded ACL, filtered by what the shipped SQL says. */
+function newBranch(fixture) {
+  const sql = grantBranch()
+  const kinds = inList(sql, 'c.relkind'), privs = inList(sql, 'a.privilege_type'), roles = inList(sql, 'g.rolname')
+  const schema = /n\.nspname = '([^']+)'/.exec(sql)[1]
+  return explodeAll(fixture)
+    .filter((r) => r.nsp === schema && kinds.includes(r.relkind) && privs.includes(r.privilege_type) && roles.includes(r.grantee))
+    .map((r) => `grant|${r.relname}.${r.grantee}.${r.privilege_type}`)
+}
+
+describe('grant fingerprint reads pg_class.relacl, not information_schema (D104)', () => {
+  it('no longer depends on who runs it', () => {
+    const sql = grantBranch()
+    expect(sql).not.toMatch(/information_schema/)
+    expect(sql).toMatch(/aclexplode\(coalesce\(c\.relacl, acldefault\('r', c\.relowner\)\)\)/)
+    expect(sql).toMatch(/join pg_roles g on g\.oid = a\.grantee/)
+    expect(sql).toMatch(/'grant', c\.relname \|\| '\.' \|\| g\.rolname \|\| '\.' \|\| a\.privilege_type, 'y'/)
+  })
+
+  it('produces exactly the keys a superuser saw through the old view', () => {
+    const before = [...new Set(viewAsSuperuser(GRANT_FIXTURE))].sort()
+    const after = [...new Set(newBranch(GRANT_FIXTURE))].sort()
+    expect(after).toEqual(before)
+    // the fixture really exercises the edges, so an empty or trivial pass is impossible
+    expect(before).toContain('grant|jobs.authenticated.SELECT')          // two grantors, one key
+    expect(before).toContain('grant|quotes.service_role.UPDATE')         // grant option
+    expect(before).toContain('grant|owned_by_service.service_role.TRUNCATE') // NULL relacl default
+    expect(before).toContain('grant|ext_rates.anon.SELECT')              // foreign table
+    expect(before).toContain('grant|events.authenticated.INSERT')        // partitioned table
+    expect(before.some((k) => k.endsWith('.MAINTAIN'))).toBe(false)     // Postgres 17 MAINTAIN excluded
+    expect(before.some((k) => /jobs_id_seq|weekly_mv|users|app_hub|PUBLIC/.test(k))).toBe(false)
+    expect(before).toHaveLength(26)
+  })
+
+  it('a fingerprint recorded with the old branch still matches — no mass re-accept', async () => {
+    const other = { 'column|jobs.id': 'uuid not null' }
+    const recorded = Object.fromEntries(viewAsSuperuser(GRANT_FIXTURE).map((k) => [k, 'y']))
+    const now = Object.fromEntries(newBranch(GRANT_FIXTURE).map((k) => [k, 'y']))
+    const api = fakeApi({ fingerprints: [seedFp({ ...other, ...recorded })], objects: { ...other, ...now } })
+    const r = await run(['verify'], { api })
+    expect(r.exitCode).toBeNull()
+    expect(r.err).toBe('')
+  })
+})
+
 
 // ---------------------------------------------------------------------------
 // THE COPY IS THE RULE, AND UNTIL NOW NOTHING CHECKED IT.
@@ -665,7 +782,7 @@ describe('a renamed pre-Lane-2 ledger is never silently treated as "nothing appl
 // Windows machine while the app repos check out LF, so comparing raw bytes
 // reports drift in every repo, every time, while the git blobs are identical —
 // a check that cries wolf weekly is a check that gets ignored within a month.
-const CANONICAL_RUNNER_SHA256 = 'a542f9237be0a27dff1555f429a68b1a9763e31d4f2fb2f2ddeb3db18d85a14c'
+const CANONICAL_RUNNER_SHA256 = '1a1ff6f081d72d87334f7518f3f6f8bf43005c0cf86364304e1d42230a0fe48e'
 
 describe('the vendored runner is byte-identical to hytek-brain/tool/migrate.mjs', () => {
   it('matches the canonical hash — if this fails, do NOT edit the hash to match', () => {

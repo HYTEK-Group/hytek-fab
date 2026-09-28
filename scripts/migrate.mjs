@@ -307,9 +307,22 @@ select 'policy', tablename || '.' || policyname,
          || coalesce(' using ' || md5(qual), '') || coalesce(' check ' || md5(with_check), '')
   from pg_policies where schemaname = 'public'
 union all
-select 'grant', table_name || '.' || grantee || '.' || privilege_type, 'y'
-  from information_schema.role_table_grants
- where table_schema = 'public' and grantee in ('anon','authenticated','service_role')
+-- Grants are read from pg_class.relacl, NOT information_schema.role_table_grants.
+-- That view only lists grants the CURRENT role takes part in, so under a
+-- read-only user (supabase_read_only_user, what the PC management token maps
+-- to since 27/09) it showed 0 grants and the runner reported 891 objects
+-- "changed" on PLANNER when nothing had (D104). This reads the same rows the
+-- view shows a superuser, whoever runs it: same relkinds ('r','v','f','p'),
+-- same default ACL for a NULL relacl, and the view's seven privilege words —
+-- MAINTAIN (Postgres 17) is in the ACL but the view never lists it, so keys
+-- recorded before this change still match.
+select 'grant', c.relname || '.' || g.rolname || '.' || a.privilege_type, 'y'
+  from pg_class c join pg_namespace n on n.oid = c.relnamespace
+ cross join lateral aclexplode(coalesce(c.relacl, acldefault('r', c.relowner))) a
+  join pg_roles g on g.oid = a.grantee
+ where n.nspname = 'public' and c.relkind in ('r','v','f','p')
+   and a.privilege_type in ('INSERT','SELECT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER')
+   and g.rolname in ('anon','authenticated','service_role')
 union all
 -- data_type is regtype, every other branch of this UNION yields text, and
 -- Postgres refuses to match them ("42804: UNION types text and regtype cannot
