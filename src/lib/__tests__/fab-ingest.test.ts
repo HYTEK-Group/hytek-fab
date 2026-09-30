@@ -218,6 +218,8 @@ describe('decideTask — the rows the Hub writes today, written by their owner',
       key: { column: 'rework_id', value: 'rw-1' },
       row: {
         fab_job_id: 'fabjob-1',
+        quote_number: expect.any(String),
+        assigned_to: null,
         description: '🔴 REWORK RW-042: Beam short by 40mm',
         status: 'open',
         created_by: 'hub:rework:rw-1',
@@ -233,11 +235,10 @@ describe('decideTask — the rows the Hub writes today, written by their owner',
     })
   })
 
-  it('skips when fab has not started the job — the Hub logs and carries on too', () => {
-    expect(decideTask(raise(), null)).toEqual({
-      action: 'ignored',
-      reason: 'no fab_jobs row — fabrication not started',
-    })
+  it('30/09: no fab job yet still writes the task — against the job number, waiting for the job', () => {
+    const d = decideTask(raise(), null, 'Troy')
+    expect(d.action).toBe('insert')
+    expect(d.action === 'insert' && d.row).toMatchObject({ fab_job_id: null, quote_number: expect.any(String), assigned_to: 'Troy', status: 'open' })
   })
 
   it('a variation raise carries the ⚠ marker and the variation_id column', () => {

@@ -172,10 +172,10 @@ describe('POST /api/fab/ingest — fab_tasks', () => {
     expect(admin.state.inserts).toHaveLength(0)
   })
 
-  it('skips when fab has not started the job — the Hub logs and carries on too', async () => {
+  it('30/09: no fab job yet → the task is still written, carrying the job number', async () => {
     admin.state.fabJob = null
-    await expect((await post(rework, SECRET)).json()).resolves.toMatchObject({ ok: true, ignored: expect.stringContaining('fab_jobs') })
-    expect(admin.state.inserts).toHaveLength(0)
+    await expect((await post(rework, SECRET)).json()).resolves.toMatchObject({ ok: true, applied: 'rework.raised' })
+    expect(admin.state.inserts[0]).toMatchObject({ table: 'fab_tasks', row: { fab_job_id: null, quote_number: '26079902', rework_id: 'rw-1' } })
   })
 
   it('rework.resolved closes, and never asks for a fab_jobs row it does not need', async () => {

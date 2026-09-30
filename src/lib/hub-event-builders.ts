@@ -26,7 +26,9 @@
 import { createHash } from 'node:crypto'
 import type { FabProgressRow } from './types'
 
-export type FabEvent = 'fab_tonnes' | 'fab_progress' | 'fab_load_dispatched' | 'fab_proof'
+// work_item_done (30/09/2026): fab's share of a Hub variation/rework is done.
+// Built in src/lib/work-item-done.ts; key work-item-done:<kind>:<item>:fabrication.
+export type FabEvent = 'fab_tonnes' | 'fab_progress' | 'fab_load_dispatched' | 'fab_proof' | 'work_item_done'
 
 /** Scalar-only by construction — see the sanitizePayload note above. */
 export type FabEventPayload = Record<string, string | number | boolean | null>

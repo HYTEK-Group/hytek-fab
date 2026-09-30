@@ -64,6 +64,7 @@ events:
     - fab_progress
     - fab_load_dispatched
     - fab_proof
+    - work_item_done          # 30/09/2026 — fab's share of a Hub variation/rework closed (src/lib/work-item-done.ts)
   # Everything below arrives at POST /api/fab/ingest with x-fab-import-secret,
   # pushed by the Hub's outbox worker. fab never polls for any of it.
   in:
@@ -193,6 +194,20 @@ exemptions:
    nothing is written twice, because the outbox filters `fab` out of the fan-out
    entirely. Owner: Lane 3. Date: the outbox list must be empty by 30/11/2026
    (`hytek-hub/__tests__/fan-out.test.ts` fails the build after it).
+8b. **Variations and rework reach a person, and closing one tells the Hub
+   (30/09/2026).** A raised variation/rework used to be dropped when fab had no
+   `fab_jobs` row for the job yet. It is now written anyway, carrying the job
+   number with a null `fab_job_id` (`sql/migrations/017`), and listed on the
+   Ready page as **Variations & rework waiting for a fab job**; Start
+   fabrication (`POST /api/fab/jobs`) attaches it to the job. It is assigned to
+   the fab lead — the one active `fab_pins` row with role `supervisor`; with
+   none or several it stays unassigned rather than guess. Setting one to
+   `done` (job task PATCH, or `PATCH /api/fab/waiting-tasks/[tid]`) stamps
+   `work_item_done_owed_at` and sends the Hub `work_item_done` (department
+   `fabrication`, `actual_hours` from `fab_tasks`' `fab_time_entries`) under
+   `HUB_TOKEN_FAB`; the stamp clears only when the Hub takes it. A failure on
+   the close lands on Exceptions as `hub_send_failed`; after that it is retried
+   quietly on every load of the Jobs list and the Ready page (no cron).
 9. **Scheduled work.** No `vercel.json`, so zero Vercel crons. One office-server
    Task Scheduler job runs `scripts/ss-ingest-bridge.mjs` against the Y: drive.
    It reads job numbers with `scripts/lib/job-ref.mjs` — 8-digit mint number
