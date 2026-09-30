@@ -7,6 +7,7 @@ import { resolveJobRef } from '@/lib/job-lookup'
 import { getSupervisorCaller, getUserCaller } from '@/lib/fab-auth'
 import { tonnageSummary } from '@/lib/fab-tonnage'
 import { jobActionSummary } from '@/lib/fab-action-centre'
+import { flushOwedWorkItems } from '@/lib/work-item-done'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,6 +16,9 @@ export async function GET(req: NextRequest) {
   if (!caller) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const admin = getSupabaseAdmin()
+  // Quiet retry of any work_item_done the Hub has not taken yet (fab has no
+  // cron; this list is the page fab opens most). Cheap when nothing is owed.
+  await flushOwedWorkItems(admin)
   const { data, error } = await admin
     .from('fab_jobs')
     .select(`
@@ -119,6 +123,7 @@ export async function POST(req: NextRequest) {
 
   if (existing) {
     await consumeFromQueue(admin, shared.quote_number)
+    await attachWaitingTasks(admin, shared.quote_number, (existing as { id: string }).id)
     return NextResponse.json({ job: existing, created: false, matched_by: resolved.matchedBy })
   }
 
@@ -152,6 +157,7 @@ export async function POST(req: NextRequest) {
   // just did, because a bookkeeping update did not take, would be the wrong
   // trade every time.
   await consumeFromQueue(admin, shared.quote_number)
+  await attachWaitingTasks(admin, shared.quote_number, (data as { id: string }).id)
 
   return NextResponse.json({ job: data, created: true, matched_by: resolved.matchedBy }, { status: 201 })
 }
@@ -164,4 +170,17 @@ async function consumeFromQueue(admin: ReturnType<typeof getSupabaseAdmin>, quot
     .eq('quote_number', quoteNumber)
     .is('consumed_at', null)
   if (error) console.warn(`[fab/jobs] could not stamp fab_ready_queue.consumed_at for ${quoteNumber}: ${error.message}`)
+}
+
+/** Variation/rework tasks the Hub raised before fabrication started wait with
+ *  the job number and no fab_job_id (sql/migrations/017). Starting the job
+ *  brings them onto it. Best-effort, never throws: a miss is still on the
+ *  waiting list and is picked up the next time this job is started/opened. */
+async function attachWaitingTasks(admin: ReturnType<typeof getSupabaseAdmin>, quoteNumber: string, fabJobId: string) {
+  const { error } = await admin
+    .from('fab_tasks')
+    .update({ fab_job_id: fabJobId, updated_at: new Date().toISOString() })
+    .eq('quote_number', quoteNumber)
+    .is('fab_job_id', null)
+  if (error) console.warn(`[fab/jobs] could not attach waiting tasks for ${quoteNumber}: ${error.message}`)
 }

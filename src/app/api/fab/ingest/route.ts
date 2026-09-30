@@ -76,6 +76,29 @@ async function applyToQueue(admin: Admin, env: FabEnvelope) {
   return { status: 200 as const, body: { ok: true, applied: env.event, quote_number: env.quote_number } }
 }
 
+/**
+ * Who a Hub variation/rework task goes to: the fab lead. fab's convention is
+ * that a task's `assigned_to` is a fab_pins.worker_name, and the lead is the
+ * active PIN with role 'supervisor'. With exactly one, it is theirs; with none
+ * or several, nobody guesses — the task stays unassigned and shows on the Jobs
+ * page or the "waiting for a fab job" list (/ready) for a supervisor to hand
+ * out. A failed read is "nobody", never a failed delivery.
+ */
+async function resolveFabLead(admin: Admin): Promise<string | null> {
+  try {
+    const { data, error } = await admin
+      .from('fab_pins')
+      .select('worker_name')
+      .eq('role', 'supervisor')
+      .eq('is_active', true)
+      .limit(2)
+    if (error || !Array.isArray(data) || data.length !== 1) return null
+    return (data[0] as { worker_name?: string | null }).worker_name?.trim() || null
+  } catch {
+    return null
+  }
+}
+
 /** The fab_tasks half: the five rework/variation verbs. */
 async function applyToTasks(admin: Admin, env: FabEnvelope) {
   // Only a raise needs the job; a close/reopen filters on rework_id and works
@@ -91,7 +114,9 @@ async function applyToTasks(admin: Admin, env: FabEnvelope) {
     fabJobId = (data as { id?: string } | null)?.id ?? null
   }
 
-  const decision = decideTask(env, fabJobId)
+  const isRaise = env.event === 'rework.raised' || env.event === 'variation.raised'
+  const lead = isRaise ? await resolveFabLead(admin) : null
+  const decision = decideTask(env, fabJobId, lead)
   if (decision.action === 'ignored') {
     return { status: 200 as const, body: { ok: true, ignored: decision.reason } }
   }

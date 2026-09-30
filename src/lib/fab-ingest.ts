@@ -262,12 +262,17 @@ export type TaskDecision =
 
 /**
  * What one rework/variation event does to `fab_tasks`. PURE. `fabJobId` is null
- * when fab has not started the job — an insert is then skipped, which is the
- * Hub's own behaviour ("skipped if the fab team hasn't started this job yet,
- * logged not failed"). A CLOSE is not skipped: the filter is on rework_id, so it
+ * when fab has not started the job — since 30/09/2026 the task is still
+ * written, against the job number, and waits for the fab job (until then it
+ * was skipped and the variation never reached fab). A CLOSE is not skipped: the filter is on rework_id, so it
  * works whether or not the job is known here.
  */
-export function decideTask(env: FabEnvelope, fabJobId: string | null): TaskDecision {
+export function decideTask(
+  env: FabEnvelope,
+  fabJobId: string | null,
+  /** fab_pins.worker_name of the fab lead (the route's resolveFabLead), or null. */
+  assignee: string | null = null,
+): TaskDecision {
   const p = env.payload
   switch (env.event) {
     case 'rework.raised':
@@ -278,7 +283,10 @@ export function decideTask(env: FabEnvelope, fabJobId: string | null): TaskDecis
       if (!parseAffectsDepts(p.affects_depts).includes('fabrication')) {
         return { action: 'ignored', reason: 'fabrication not affected' }
       }
-      if (!fabJobId) return { action: 'ignored', reason: 'no fab_jobs row — fabrication not started' }
+      // 30/09/2026: no fab job yet is no longer a reason to drop the work. The
+      // task carries the job NUMBER, waits on the "waiting for a fab job" list
+      // (/ready), and POST /api/fab/jobs attaches it when fabrication starts
+      // (sql/migrations/017 lets fab_job_id be null for exactly this).
       const number = str(isRework ? p.rework_number : p.variation_number) ?? id
       const marker = isRework ? '🔴 REWORK' : '⚠ VARIATION'
       return {
@@ -286,6 +294,8 @@ export function decideTask(env: FabEnvelope, fabJobId: string | null): TaskDecis
         key: { column: isRework ? 'rework_id' : 'variation_id', value: id },
         row: {
           fab_job_id: fabJobId,
+          quote_number: env.quote_number,
+          assigned_to: assignee,
           description: `${marker} ${number}: ${str(p.description) ?? '(no description)'}`,
           status: 'open',
           created_by: `hub:${isRework ? 'rework' : 'variation'}:${id}`,

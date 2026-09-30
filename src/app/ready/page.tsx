@@ -7,6 +7,17 @@ import { AppShell } from '@/components/app-shell'
 import { supabase } from '@/lib/supabase'
 import type { ReadyQueueItem } from '@/lib/types'
 
+interface WaitingTask {
+  id: string
+  quote_number: string | null
+  job_name: string | null
+  description: string
+  assigned_to: string | null
+  status: string
+  variation_id: string | null
+  rework_id: string | null
+}
+
 export default function ReadyQueuePage() {
   const { user, loading } = useAuth()
   const router = useRouter()
@@ -14,6 +25,9 @@ export default function ReadyQueuePage() {
   const [note, setNote] = useState<string | null>(null)
   const [fetching, setFetching] = useState(true)
   const [starting, setStarting] = useState<string | null>(null)
+  // Hub variation/rework tasks for jobs fab has not started (sql/migrations/017).
+  const [waiting, setWaiting] = useState<WaitingTask[]>([])
+  const [closing, setClosing] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession()
@@ -29,8 +43,26 @@ export default function ReadyQueuePage() {
       // screen must never show the first when it means the second.
       setNote(body.note ?? null)
     }
+    const w = await fetch('/api/fab/waiting-tasks', {
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    })
+    if (w.ok) setWaiting(((await w.json()).tasks ?? []) as WaitingTask[])
     setFetching(false)
   }, [])
+
+  async function markDone(t: WaitingTask) {
+    if (!confirm(`Mark fab's part of this ${t.rework_id ? 'rework' : 'variation'} done? The Hub is told.`)) return
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) return
+    setClosing(t.id)
+    await fetch(`/api/fab/waiting-tasks/${t.id}`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'done' }),
+    })
+    setClosing(null)
+    load()
+  }
 
   useEffect(() => { if (!loading && !user) router.push('/login') }, [user, loading, router])
   useEffect(() => { if (user) load() }, [user, load])
@@ -68,6 +100,37 @@ export default function ReadyQueuePage() {
         <p className="text-xs mb-3" style={{ color: 'var(--text-2)', textTransform: 'uppercase', letterSpacing: '.07em' }}>
           {fetching ? 'Checking Hub…' : `${items.length} job${items.length !== 1 ? 's' : ''} ready to start`}
         </p>
+
+        {waiting.length > 0 && (
+          <div className="rounded-xl p-3 mb-4" style={{ background: 'var(--chip-warning-bg)', border: '0.5px solid var(--chip-warning-bg)' }}>
+            <p className="text-sm mb-2" style={{ color: 'var(--warning)', fontWeight: 700 }}>
+              Variations &amp; rework waiting for a fab job — {waiting.length}
+            </p>
+            <p className="text-xs mb-2" style={{ color: 'var(--text-2)' }}>
+              Raised in the Hub before fabrication started. They move onto the job when you start it.
+            </p>
+            <div className="flex flex-col gap-2">
+              {waiting.map(t => (
+                <div key={t.id} className="rounded-lg p-2 flex items-center justify-between gap-2" style={{ background: 'var(--surface)', border: '0.5px solid var(--border)' }}>
+                  <div className="min-w-0">
+                    <p className="text-xs" style={{ color: 'var(--text-2)' }}>
+                      {t.quote_number}{t.job_name ? ` · ${t.job_name}` : ''} · {t.assigned_to ?? 'Unassigned'}
+                    </p>
+                    <p className="text-sm" style={{ color: 'var(--foreground)' }}>{t.description}</p>
+                  </div>
+                  <button
+                    onClick={() => markDone(t)}
+                    disabled={closing === t.id}
+                    className="text-xs rounded-lg shrink-0"
+                    style={{ background: 'var(--hytek-yellow)', color: 'var(--on-brand)', padding: '6px 10px', border: 'none' }}
+                  >
+                    {closing === t.id ? '…' : 'Done'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {note && !fetching && (
           <div className="rounded-xl p-3 mb-3" style={{ background: 'var(--chip-warning-bg)', border: '0.5px solid var(--chip-warning-bg)' }}>
