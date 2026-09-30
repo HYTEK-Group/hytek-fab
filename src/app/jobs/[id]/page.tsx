@@ -808,7 +808,7 @@ function TimeLogTab({ jobId, token }: { jobId: string; token: string }) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function JobDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
-  const { user, loading } = useAuth()
+  const { user, profile, loading } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
   const validTabs: Tab[] = ['assemblies', 'tasks', 'marks', 'drawings', 'stages', 'packages', 'qc', 'dispatch', 'proof', 'timelog']
@@ -816,28 +816,26 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
   const [job, setJob] = useState<JobDetail | null>(null)
   const [tab, setTab] = useState<Tab>(tabParam && validTabs.includes(tabParam) ? tabParam : 'assemblies')
   const [token, setToken] = useState('')
-  const [role, setRole] = useState('fabricator')
   const [dispatching, setDispatching] = useState(false)
+  // The signed-in user's role, from the profile auth-context already loads
+  // (same profiles row the page used to query again itself).
+  const role: string = profile?.role || 'fabricator'
 
   const load = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return
     setToken(session.access_token)
-    const res = await fetch('/api/fab/jobs', { headers: { Authorization: `Bearer ${session.access_token}` } })
+    // One job, not the whole list (GET /api/fab/jobs/[id] — same fields).
+    const res = await fetch(`/api/fab/jobs/${id}`, { headers: { Authorization: `Bearer ${session.access_token}` } })
     if (res.ok) {
-      const jobs = (await res.json()).jobs ?? []
-      const found = jobs.find((j: JobDetail) => j.id === id)
+      const found = (await res.json()).job as JobDetail | undefined
       if (found) setJob(found)
     }
   }, [id])
 
   useEffect(() => { if (!loading && !user) router.push('/login') }, [user, loading, router])
   useEffect(() => {
-    if (user) {
-      load()
-      supabase.from('profiles').select('role').eq('id', user.id).single()
-        .then(({ data }) => { if (data?.role) setRole(data.role as string) })
-    }
+    if (user) load()
   }, [user, load])
 
   async function postDispatch(payload: object) {

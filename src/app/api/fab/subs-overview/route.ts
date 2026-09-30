@@ -37,8 +37,11 @@ export async function GET(req: NextRequest) {
     .order('contractor_name', { ascending: true })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  const subs = []
-  for (const a of accounts ?? []) {
+  // One grants read per account, run together rather than one after another.
+  // (Kept per account rather than one .in() query so no account's list can be
+  // cut short by the API's row cap on a combined result.) Promise.all keeps the
+  // accounts' order.
+  const subs = await Promise.all((accounts ?? []).map(async a => {
     const { data: grants } = await admin
       .from('fab_sub_grants')
       .select('package_id, granted_at, fab_contractor_packages(id, fab_job_id, delivery_mode, status, ready_at, drop_ship_released_at, fab_jobs(quote_number, name))')
@@ -64,7 +67,7 @@ export async function GET(req: NextRequest) {
       })
     }
 
-    subs.push({
+    return {
       id: a.id,
       contractor_name: a.contractor_name,
       is_active: a.is_active,
@@ -72,8 +75,8 @@ export async function GET(req: NextRequest) {
       created_at: a.created_at,
       invite_link: inviteLink(req, a.login_slug),
       jobs,
-    })
-  }
+    }
+  }))
 
   return NextResponse.json({ subs })
 }
