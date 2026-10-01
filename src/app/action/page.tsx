@@ -77,7 +77,7 @@ export default function ActionCentrePage() {
               {qc.length === 0 ? <p className="text-xs" style={{ color: 'var(--text-2)' }}>Nothing waiting.</p> : qc.map(j => (
                 <button key={j.id} style={card} onClick={() => go(j.id, 'qc')}>
                   <div className="flex justify-between items-center">
-                    {head(`${j.quote_number} `)}<span style={{ color: 'var(--text-3)', flex: 1 }}> {j.name}</span>
+                    {head(`${j.quote_number} `)}<span style={{ color: 'var(--text-3)', flex: 1 }}>{j.name ? ` · ${j.name}` : ''}</span>
                     <span style={{ color: 'var(--foreground)', fontWeight: 700 }}>{j.qc_waiting} to QC →</span>
                   </div>
                 </button>
@@ -93,7 +93,7 @@ export default function ActionCentrePage() {
               {disp.length === 0 ? <p className="text-xs" style={{ color: 'var(--text-2)' }}>Nothing waiting.</p> : disp.map(j => (
                 <button key={j.id} style={card} onClick={() => go(j.id, 'dispatch')}>
                   <div className="flex justify-between items-center">
-                    {head(`${j.quote_number} `)}<span style={{ color: 'var(--text-3)', flex: 1 }}> {j.name}</span>
+                    {head(`${j.quote_number} `)}<span style={{ color: 'var(--text-3)', flex: 1 }}>{j.name ? ` · ${j.name}` : ''}</span>
                     <span style={{ color: 'var(--success)' }}>{j.dispatch_ready} ready →</span>
                   </div>
                 </button>
@@ -109,7 +109,7 @@ export default function ActionCentrePage() {
               {pkg.length === 0 ? <p className="text-xs" style={{ color: 'var(--text-2)' }}>Nothing out.</p> : pkg.map(j => (
                 <button key={j.id} style={card} onClick={() => go(j.id, 'packages')}>
                   <div className="flex justify-between items-center">
-                    {head(`${j.quote_number} `)}<span style={{ color: 'var(--text-3)', flex: 1 }}> {j.name}</span>
+                    {head(`${j.quote_number} `)}<span style={{ color: 'var(--text-3)', flex: 1 }}>{j.name ? ` · ${j.name}` : ''}</span>
                     <span style={{ color: j.packages_overdue > 0 ? 'var(--danger)' : 'var(--info)' }}>
                       {j.packages_out} out{j.packages_overdue > 0 ? ` · ${j.packages_overdue} overdue` : ''} →
                     </span>

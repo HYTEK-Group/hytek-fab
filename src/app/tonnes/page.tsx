@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/auth-context'
 import { AppShell } from '@/components/app-shell'
 import { supabase } from '@/lib/supabase'
+import { jobLabel } from '@/lib/job-label'
 import type { FabJob } from '@/lib/types'
 
 function prevMonday(offset = 0): string {
@@ -106,8 +107,7 @@ export default function TonnesPage() {
         <div className="flex flex-col gap-3 mb-4">
           {activeJobs.map(job => (
             <div key={job.id} className="rounded-xl p-3" style={{ background: 'var(--surface)', border: '0.5px solid var(--border)' }}>
-              <p className="text-xs font-medium mb-0.5" style={{ color: 'var(--foreground)', fontWeight: 700 }}>{job.quote_number}</p>
-              <p className="text-sm font-medium mb-3" style={{ color: 'var(--foreground)' }}>{job.name}</p>
+              <p className="text-sm font-medium mb-3" style={{ color: 'var(--foreground)' }}>{jobLabel(job.quote_number, job.name)}</p>
               <div className="grid grid-cols-2 gap-2 mb-2">
                 <div>
                   <label className="text-xs block mb-1" style={{ color: 'var(--text-2)' }}>Tonnes</label>

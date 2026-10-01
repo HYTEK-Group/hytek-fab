@@ -10,6 +10,7 @@ import { SubPackagePanel } from '@/components/sub-package-panel'
 import { StagesTab } from '@/components/stages-tab'
 import { supabase } from '@/lib/supabase'
 import { kgToTonnes } from '@/lib/fab-tonnage'
+import { jobLabel } from '@/lib/job-label'
 import type { FabJob, FabTask, FabMark, FabTimeEntry } from '@/lib/types'
 
 type Tab = 'assemblies' | 'tasks' | 'marks' | 'drawings' | 'stages' | 'packages' | 'qc' | 'dispatch' | 'proof' | 'timelog'
@@ -897,15 +898,14 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
           <button onClick={() => router.push('/shop')} className="text-xs mb-2 block" style={{ background: 'none', border: 'none', color: 'var(--text-2)', padding: 0 }}>
             ← Shop
           </button>
-          <div className="flex justify-between items-start mb-1">
-            <span className="text-xs font-medium" style={{ color: 'var(--foreground)', fontWeight: 700 }}>{job.quote_number}</span>
+          <div className="flex justify-end items-start mb-1">
             {job.dispatch_requested_at && (
               <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: 'var(--chip-success-bg)', color: 'var(--success)', border: '0.5px solid var(--success)' }}>
                 Dispatch ready
               </span>
             )}
           </div>
-          <p className="text-base font-semibold mb-0.5" style={{ color: 'var(--foreground)' }}>{job.name}</p>
+          <p className="text-base font-semibold mb-0.5" style={{ color: 'var(--foreground)' }}>{jobLabel(job.quote_number, job.name)}</p>
           <p className="text-xs mb-2" style={{ color: 'var(--text-2)' }}>{job.client ?? '—'} {job.on_site_date ? `· On site ${job.on_site_date}` : ''}</p>
           <div className="flex gap-4 text-xs mb-3 flex-wrap" style={{ color: 'var(--text-2)' }}>
             <span style={{ color: 'var(--foreground)' }}>{kgToTonnes(job.made_kg)} / {kgToTonnes(job.total_kg)} t · {pct}%</span>

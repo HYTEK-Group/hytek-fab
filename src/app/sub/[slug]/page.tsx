@@ -6,6 +6,7 @@
 // attach certs, report progress, and hit "Ready to collect" when it's done.
 // PIN sign-in per contractor link (/sub/<slug>); first visit sets the PIN.
 import { useCallback, useEffect, useState, use } from 'react'
+import { jobLabel } from '@/lib/job-label'
 
 const YELLOW = 'var(--hytek-yellow)'
 const STORE_KEY = 'fab_sub'
@@ -280,7 +281,7 @@ function PackageSection({ pkg, token, onDone }: { pkg: Pkg; token: string; onDon
         <div style={{ fontWeight: 700, fontSize: 20, color: 'var(--foreground)' }}>
           {pkg.total_pieces} pieces released to you
         </div>
-        {pkg.job.name && <div style={{ color: 'var(--text-2)', fontSize: 15, marginTop: 2 }}>{pkg.job.name}</div>}
+        {(pkg.job.quote_number || pkg.job.name) && <div style={{ color: 'var(--text-2)', fontSize: 15, marginTop: 2 }}>{jobLabel(pkg.job.quote_number, pkg.job.name)}</div>}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
           {due && <span style={{ color: 'var(--foreground)', fontSize: 14, fontWeight: 600 }}>due {dm(due)}</span>}
           <span style={modeChip}>

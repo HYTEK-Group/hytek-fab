@@ -6,6 +6,7 @@ import { useAuth } from '@/lib/auth-context'
 import { AppShell } from '@/components/app-shell'
 import { supabase } from '@/lib/supabase'
 import { kgToTonnes } from '@/lib/fab-tonnage'
+import { jobLabel } from '@/lib/job-label'
 import type { FabJob } from '@/lib/types'
 
 interface JobSummary extends FabJob {
@@ -81,7 +82,7 @@ export default function ShopPage() {
           <div className="rounded-xl p-3 mb-4 flex gap-2" style={{ background: 'var(--chip-success-bg)', border: '0.5px solid var(--success)' }}>
             <span style={{ color: 'var(--success)' }}>✓</span>
             <p className="text-sm" style={{ color: 'var(--success)' }}>
-              <strong style={{ color: 'var(--foreground)' }}>{dispatchReady.map(j => j.name).join(', ')}</strong> — fab complete, dispatch alerted
+              <strong style={{ color: 'var(--foreground)' }}>{dispatchReady.map(j => jobLabel(j.quote_number, j.name)).join(', ')}</strong> — fab complete, dispatch alerted
             </p>
           </div>
         )}
@@ -108,11 +109,10 @@ export default function ShopPage() {
                 className="rounded-xl p-3 text-left w-full"
                 style={{ background: 'var(--surface)', border: '0.5px solid var(--border)' }}
               >
-                <div className="flex justify-between items-center mb-1">
-                  <span className="text-xs font-medium" style={{ color: 'var(--foreground)', fontWeight: 700 }}>{job.quote_number}</span>
+                <div className="flex justify-end items-center mb-1">
                   <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: badge.bg, color: badge.color }}>{badge.label}</span>
                 </div>
-                <p className="text-sm font-medium mb-0.5 truncate" style={{ color: 'var(--foreground)' }}>{job.name}</p>
+                <p className="text-sm font-medium mb-0.5 truncate" style={{ color: 'var(--foreground)' }}>{jobLabel(job.quote_number, job.name)}</p>
                 <p className="text-xs mb-2 truncate" style={{ color: 'var(--text-2)' }}>{job.client ?? '—'}</p>
                 <div className="rounded-full h-1 mb-1" style={{ background: 'var(--track)' }}>
                   <div className="h-full rounded-full" style={{ background: 'var(--hytek-yellow)', width: `${pct}%` }} />

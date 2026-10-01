@@ -113,7 +113,7 @@ export default function ReportPage() {
                   return (
                     <tr key={j.id} style={{ cursor: 'pointer' }} onClick={() => router.push(`/jobs/${j.id}`)}>
                       <td style={{ ...cell, color: 'var(--foreground)' }}>
-                        <span style={{ color: 'var(--foreground)', fontWeight: 700 }}>{j.quote_number}</span> {j.name}
+                        <span style={{ color: 'var(--foreground)', fontWeight: 700 }}>{j.quote_number}</span>{j.name ? ` · ${j.name}` : ''}
                         {j.marks_missing_weight > 0 && (
                           <span style={{ color: 'var(--warning)' }}> · {j.marks_missing_weight} no wt</span>
                         )}
