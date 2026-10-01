@@ -5,6 +5,7 @@
 // Full job setup stays on the office PC.
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import { jobLabel } from '@/lib/job-label'
 
 const IDLE_MS = 30 * 60 * 1000
 
@@ -159,7 +160,7 @@ export default function KioskSupervisorPage() {
           <p style={{ opacity: 0.7, marginBottom: 16 }}>Pick a job for QC and contractor packages. Full setup is on the office PC.</p>
           {jobs.map(j => (
             <button key={j.id} onClick={() => openJob(j)} style={jobCard}>
-              <div style={{ fontWeight: 700 }}>{j.quote_number} — {j.name}</div>
+              <div style={{ fontWeight: 700 }}>{jobLabel(j.quote_number, j.name)}</div>
               <div style={{ fontSize: 13, opacity: 0.7 }}>{(j.mark_done ?? 0)}/{(j.mark_count ?? 0)} marks complete</div>
             </button>
           ))}
@@ -196,7 +197,7 @@ export default function KioskSupervisorPage() {
       {active && (
         <>
           <button onClick={() => setActive(null)} style={ghostBtn}>&#x2190; All jobs</button>
-          <h2 style={{ color: 'var(--foreground)', fontWeight: 700 }}>{active.quote_number} — {active.name}</h2>
+          <h2 style={{ color: 'var(--foreground)', fontWeight: 700 }}>{jobLabel(active.quote_number, active.name)}</h2>
 
           <section style={{ marginTop: 16 }}>
             <h3 style={sub}>QC review ({pending.length} awaiting)</h3>

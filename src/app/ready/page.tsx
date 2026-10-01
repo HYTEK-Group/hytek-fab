@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/auth-context'
 import { AppShell } from '@/components/app-shell'
 import { supabase } from '@/lib/supabase'
+import { jobLabel } from '@/lib/job-label'
 import type { ReadyQueueItem } from '@/lib/types'
 
 interface WaitingTask {
@@ -114,7 +115,7 @@ export default function ReadyQueuePage() {
                 <div key={t.id} className="rounded-lg p-2 flex items-center justify-between gap-2" style={{ background: 'var(--surface)', border: '0.5px solid var(--border)' }}>
                   <div className="min-w-0">
                     <p className="text-xs" style={{ color: 'var(--text-2)' }}>
-                      {t.quote_number}{t.job_name ? ` · ${t.job_name}` : ''} · {t.assigned_to ?? 'Unassigned'}
+                      {jobLabel(t.quote_number, t.job_name)} · {t.assigned_to ?? 'Unassigned'}
                     </p>
                     <p className="text-sm" style={{ color: 'var(--foreground)' }}>{t.description}</p>
                   </div>
@@ -147,13 +148,12 @@ export default function ReadyQueuePage() {
         <div className="flex flex-col gap-3">
           {items.map(item => (
             <div key={item.quote_number} className="rounded-xl p-3" style={{ background: 'var(--surface)', border: '0.5px solid var(--border)' }}>
-              <div className="flex justify-between items-center mb-1">
-                <span className="text-xs font-medium" style={{ color: 'var(--foreground)', fontWeight: 700 }}>{item.quote_number}</span>
+              <div className="flex justify-end items-center mb-1">
                 {item.on_site_date && (
                   <span className="text-xs" style={{ color: 'var(--text-2)' }}>On site {item.on_site_date}</span>
                 )}
               </div>
-              <p className="text-sm font-medium mb-0.5" style={{ color: 'var(--foreground)' }}>{item.name}</p>
+              <p className="text-sm font-medium mb-0.5" style={{ color: 'var(--foreground)' }}>{jobLabel(item.quote_number, item.name)}</p>
               <p className="text-xs mb-3" style={{ color: 'var(--text-2)' }}>{item.client ?? '—'}</p>
 
               <div className="flex gap-2 flex-wrap mb-3">

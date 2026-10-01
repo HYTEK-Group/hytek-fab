@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { getUserCaller } from '@/lib/fab-auth'
+import { jobLabel as formatJobLabel } from '@/lib/job-label'
 import { EXCEPTION_KINDS, CLEAR_KIND, foldExceptions, sameHuman, type RawEvent, type Identity } from '@/lib/fab-gatekeeper'
 
 export const dynamic = 'force-dynamic'
@@ -27,12 +28,12 @@ export async function GET(req: NextRequest) {
 
   const { open, cleared } = foldExceptions((data ?? []) as RawEvent[])
 
-  // Attach a friendly job label (quote_number — name).
+  // Attach a friendly job label, job number first (quote_number · name).
   const jobIds = [...new Set([...open, ...cleared].map(e => e.fab_job_id).filter((x): x is string => !!x))]
   const jobLabel = new Map<string, string>()
   if (jobIds.length > 0) {
     const { data: jobs } = await admin.from('fab_jobs').select('id, quote_number, name').in('id', jobIds)
-    for (const j of jobs ?? []) jobLabel.set(j.id, [j.quote_number, j.name].filter(Boolean).join(' — '))
+    for (const j of jobs ?? []) jobLabel.set(j.id, formatJobLabel(j.quote_number, j.name))
   }
   // Clearing is a Supabase-login admin action (the clear route rejects kiosk
   // tokens), so the button only shows for a logged-in admin who isn't the raiser.

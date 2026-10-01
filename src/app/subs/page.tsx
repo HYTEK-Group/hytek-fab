@@ -164,7 +164,7 @@ export default function SubsPage() {
                   <div style={{ minWidth: 0 }}>
                     <button onClick={() => j.quote_number && router.push(`/jobs?tab=packages`)} style={{ background: 'none', border: 'none', padding: 0, textAlign: 'left', cursor: 'pointer' }}>
                       <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--foreground)' }}>{j.quote_number ?? 'job'}</span>
-                      {j.job_name && <span style={{ fontSize: 12, color: 'var(--text-2)' }}> · {j.job_name}</span>}
+                      {j.job_name && <span style={{ fontSize: 12, color: 'var(--text-2)' }}>{j.quote_number ? ' · ' : ''}{j.job_name}</span>}
                     </button>
                     <div className="flex items-center gap-1.5 flex-wrap" style={{ marginTop: 2 }}>
                       <span style={chip('var(--surface-2)', 'var(--text-2)')}>{j.delivery_mode === 'drop_ship' ? 'drop-ship' : 'to Brisbane'}</span>

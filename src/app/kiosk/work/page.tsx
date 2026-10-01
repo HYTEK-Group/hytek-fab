@@ -6,6 +6,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { PhotoCapture } from '@/components/photo-capture'
+import { jobLabel } from '@/lib/job-label'
 
 const IDLE_MS = 30 * 60 * 1000
 
@@ -99,7 +100,7 @@ export default function KioskWorkPage() {
 
       {Array.from(groups.entries()).map(([quote, list]) => (
         <section key={quote} style={{ marginBottom: 28 }}>
-          <h2 style={sectionHead}>{list[0].job_name ?? quote}</h2>
+          <h2 style={sectionHead}>{jobLabel(list[0].quote_number, list[0].job_name) || quote}</h2>
           {list.map(m => {
             const done = isDone(m.status)
             const running = m.status === 'in_progress'
