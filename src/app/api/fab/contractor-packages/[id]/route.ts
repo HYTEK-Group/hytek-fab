@@ -4,7 +4,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { getSupervisorCaller } from '@/lib/fab-auth'
-import { computeAndPublishProgress } from '@/lib/fab-progress'
+import { publishProgressAfterResponse } from '@/lib/after-response'
 import type { ContractorPackageStatus, DeliveryMode } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
@@ -66,6 +66,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       .eq('contractor_package_id', id)
   }
 
-  await computeAndPublishProgress(pkg.fab_job_id)
+  publishProgressAfterResponse(pkg.fab_job_id)
   return NextResponse.json({ package: pkg })
 }

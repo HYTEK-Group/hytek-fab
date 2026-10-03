@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { getSupervisorCaller } from '@/lib/fab-auth'
 import { computeAndPublishProgress } from '@/lib/fab-progress'
+import { runAfterResponse } from '@/lib/after-response'
 import { sendFabEventLogged } from '@/lib/hub-events'
 import { buildLoadDispatchedEvent } from '@/lib/hub-event-builders'
 
@@ -67,30 +68,37 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   // "A truck left" is a discrete fact, and until now the only way anyone could
   // learn it was to poll the progress rollup and diff dispatch_loads. The
   // Delivery Board and dispatch's fab-ready feed get a signal they can key on.
-  if (body.dispatched === true && !alreadyDispatched) {
-    const job = load.fab_jobs as unknown as { quote_number: string; hubspot_deal_id: string | null } | null
-    const { count: marksCount } = await admin
-      .from('fab_marks')
-      .select('id', { count: 'exact', head: true })
-      .eq('dispatch_load_id', id)
-    if (job?.quote_number) {
-      await sendFabEventLogged(
-        admin,
-        buildLoadDispatchedEvent({
-          quoteNumber: job.quote_number,
-          dealId: job.hubspot_deal_id,
-          loadNumber: load.load_number as number,
-          dispatchedAt: now,
-          driver: (patch.driver as string | null | undefined) ?? (load.driver as string | null),
-          marksCount: marksCount ?? 0,
-          description: (patch.description as string | null | undefined) ?? (load.description as string | null),
-        }),
-        load.fab_job_id,
-        caller.name,
-      )
+  //
+  // Both Hub sends run after the response (lib/after-response.ts): the load
+  // update above is already committed, and the "truck left" event still goes
+  // before the progress rollup, in one callback, as it did inline.
+  const sendDispatched = body.dispatched === true && !alreadyDispatched
+  runAfterResponse(`dispatch-load ${id}`, async () => {
+    if (sendDispatched) {
+      const job = load.fab_jobs as unknown as { quote_number: string; hubspot_deal_id: string | null } | null
+      const { count: marksCount } = await admin
+        .from('fab_marks')
+        .select('id', { count: 'exact', head: true })
+        .eq('dispatch_load_id', id)
+      if (job?.quote_number) {
+        await sendFabEventLogged(
+          admin,
+          buildLoadDispatchedEvent({
+            quoteNumber: job.quote_number,
+            dealId: job.hubspot_deal_id,
+            loadNumber: load.load_number as number,
+            dispatchedAt: now,
+            driver: (patch.driver as string | null | undefined) ?? (load.driver as string | null),
+            marksCount: marksCount ?? 0,
+            description: (patch.description as string | null | undefined) ?? (load.description as string | null),
+          }),
+          load.fab_job_id,
+          caller.name,
+        )
+      }
     }
-  }
 
-  await computeAndPublishProgress(load.fab_job_id)
+    await computeAndPublishProgress(load.fab_job_id)
+  })
   return NextResponse.json({ ok: true })
 }
