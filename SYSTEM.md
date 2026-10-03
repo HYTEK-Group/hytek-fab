@@ -79,8 +79,8 @@ migrations_dir: sql/migrations
 migrate_staging: lvjxqygftugmcadstpff   # SHARED staging clone — every migration lands here first
 migrate_prod: gqtikzguvhukpujyxkez      # SHARED production — Lane 13's cutover window only
 exemptions:
-  - { path: scripts/ss-ingest-bridge.mjs, reason: "on-site script; Lane 12 moves it to hytek-bridge", until: 2026-10-31 }
-  - { path: scripts/run-ss-ingest.cmd, reason: "on-site script; Lane 12 moves it to hytek-bridge", until: 2026-10-31 }
+  - { path: scripts/ss-ingest-bridge.mjs, reason: "on-site script; Lane 12 moves it to hytek-bridge", until: 2026-11-30 }
+  - { path: scripts/run-ss-ingest.cmd, reason: "on-site script; Lane 12 moves it to hytek-bridge", until: 2026-11-30 }
 ---
 
 # hytek-fab — passport
