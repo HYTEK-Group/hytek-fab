@@ -1,4 +1,4 @@
-// One login across the HYTEK apps on hytekframing.com.au (D226, 21/10/2026).
+// One login across the HYTEK apps on hytekframing.com.au (D232, 21/10/2026).
 //
 // Each app used to keep its Supabase login in its own browser storage, so
 // signing into the Hub told Detailing, Install, Fab and Purchasing nothing and

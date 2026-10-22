@@ -3,7 +3,7 @@ import { JSDOM, CookieJar } from 'jsdom'
 import { describe, expect, it } from 'vitest'
 import { clearHostOnlyLoginCookies, sharedLoginStorage } from '../shared-login'
 
-// D226 shared login against jsdom's real cookie engine (RFC 6265 rules for
+// D232 shared login against jsdom's real cookie engine (RFC 6265 rules for
 // Domain, Secure, host-only and Max-Age), with one jar shared by several
 // HYTEK addresses the way one browser shares it.
 

@@ -7,7 +7,7 @@ import {
   sharedLoginStorage,
 } from '../shared-login'
 
-// D226 shared login. The same test sits beside every copy of shared-login.ts.
+// D232 shared login. The same test sits beside every copy of shared-login.ts.
 
 // A made-up project reference — no code may name the live one.
 const KEY = 'sb-testproject-auth-token'

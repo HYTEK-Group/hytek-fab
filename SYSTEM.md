@@ -278,7 +278,7 @@ that says so, so `select name, note from schema_migrations where note like
 'GitHub Actions down%'` lists them. Re-run the workflow afterwards — the ledger
 makes it a no-op.
 
-## One login across the apps (21/10/2026, D226)
+## One login across the apps (21/10/2026, D232)
 
 The browser login can live in ONE cookie for `hytekframing.com.au`, shared by
 the Hub, Detailing (with Dispatch), Install, Fab and Purchasing, so logging into
