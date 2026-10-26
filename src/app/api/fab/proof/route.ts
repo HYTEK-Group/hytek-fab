@@ -9,6 +9,7 @@ import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { getUserCaller } from '@/lib/fab-auth'
 import { imageSha256, duplicatePhotoCheck, isUniqueViolation } from '@/lib/fab-photo-dedupe'
 import { sendFabEventLogged } from '@/lib/hub-events'
+import { runAfterResponse } from '@/lib/after-response'
 import { buildProofEvent } from '@/lib/hub-event-builders'
 import type { ProofStage } from '@/lib/types'
 
@@ -78,14 +79,16 @@ export async function POST(req: NextRequest) {
   // `fab-proof` bucket — the event carries the storage path so the Hub can sign
   // a URL later if it ever needs to show one. Traceability doctrine: the photo
   // IS the proof, and proof that only one app can see is not traceability.
-  await sendFabEventLogged(admin, buildProofEvent({
+  // Sent after the response (lib/after-response.ts) — the photo and its row are
+  // already saved above; the Hub send no longer holds up the upload.
+  runAfterResponse(`fab_proof ${row.id}`, () => sendFabEventLogged(admin, buildProofEvent({
     quoteNumber: job.quote_number,
     dealId: job.hubspot_deal_id,
     stage, photoId: row.id, path,
     takenAt: row.taken_at,
     markId, packageId, loadId,
     takenBy: caller.name,
-  }), jobId, caller.name)
+  }), jobId, caller.name))
 
   const { data: signed } = await admin.storage.from('fab-proof').createSignedUrl(path, 3600)
   return NextResponse.json({ ok: true, id: row.id, stage: row.stage, taken_at: row.taken_at, url: signed?.signedUrl ?? null })

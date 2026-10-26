@@ -20,6 +20,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { requireFabSupervisor } from '@/lib/get-fab-user'
 import { sendFabEventLogged, summariseSends, type SendResult } from '@/lib/hub-events'
+import { runAfterResponse } from '@/lib/after-response'
 import { buildTonnesEvent } from '@/lib/hub-event-builders'
 
 export const dynamic = 'force-dynamic'
@@ -72,17 +73,19 @@ export async function POST(req: NextRequest) {
   const createdAtMs = Date.now()
   const occurredAt = new Date(createdAtMs).toISOString()
 
-  // One read for the deal ids rather than one per entry.
-  const { data: jobRows } = await admin
-    .from('fab_jobs')
-    .select('id, hubspot_deal_id')
-    .in('id', body.entries.map(e => e.fab_job_id))
-  const dealIdByJob = new Map((jobRows ?? []).map(j => [j.id as string, j.hubspot_deal_id as string | null]))
+  // The Hub feed runs after the response (lib/after-response.ts), and the
+  // per-job sends go out together rather than one after another. Each send
+  // already never throws and logs its own failure to fab_events.
+  runAfterResponse(`fab_tonnes ${body.week_start}`, async () => {
+    // One read for the deal ids rather than one per entry.
+    const { data: jobRows } = await admin
+      .from('fab_jobs')
+      .select('id, hubspot_deal_id')
+      .in('id', body.entries.map(e => e.fab_job_id))
+    const dealIdByJob = new Map((jobRows ?? []).map(j => [j.id as string, j.hubspot_deal_id as string | null]))
 
-  const results: SendResult[] = []
-  for (const e of body.entries) {
-    results.push(
-      await sendFabEventLogged(
+    const settled = await Promise.allSettled(body.entries.map(e =>
+      sendFabEventLogged(
         admin,
         buildTonnesEvent({
           quoteNumber: e.quote_number,
@@ -100,14 +103,18 @@ export async function POST(req: NextRequest) {
         e.fab_job_id,
         enteredBy,
       ),
+    ))
+    const results: SendResult[] = settled.map(r =>
+      r.status === 'fulfilled' ? r.value : { ok: false, status: 500, error: String(r.reason) },
     )
-  }
+    const hub = summariseSends(results)
+    if (hub.failed > 0) console.error(`[fab tonnes] ${hub.failed} Hub send(s) failed for week ${body.week_start}: ${hub.reason}`)
+  })
 
   return NextResponse.json({
     ok: true,
     total_tonnes: totalTonnes,
     jobs: body.entries.length,
-    hub: summariseSends(results),
   })
 }
 

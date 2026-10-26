@@ -5,8 +5,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { resolveJobRef } from '@/lib/job-lookup'
 import { getSupervisorCaller, getUserCaller } from '@/lib/fab-auth'
-import { tonnageSummary } from '@/lib/fab-tonnage'
-import { jobActionSummary } from '@/lib/fab-action-centre'
+import { FAB_JOB_SUMMARY_SELECT, summariseFabJob } from '@/lib/fab-job-summary'
 import { flushOwedWorkItems } from '@/lib/work-item-done'
 
 export const dynamic = 'force-dynamic'
@@ -21,50 +20,15 @@ export async function GET(req: NextRequest) {
   await flushOwedWorkItems(admin)
   const { data, error } = await admin
     .from('fab_jobs')
-    .select(`
-      *,
-      fab_tasks(id, status),
-      fab_time_entries(hours),
-      fab_marks(id, status, weight_kg, quantity, dispatch_load_id),
-      fab_contractor_packages(id, status, package_type, expected_return_date)
-    `)
+    .select(FAB_JOB_SUMMARY_SELECT)
     .not('is_test', 'is', true)
     .order('created_at', { ascending: false })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  // Summarise nested arrays into counts
-  const jobs = (data ?? []).map((j: Record<string, unknown>) => {
-    const tasks = (j.fab_tasks as Array<{ id: string; status: string }>) ?? []
-    const marks = (j.fab_marks as Array<{ id: string; status: string; weight_kg: number | null; quantity: number | null; dispatch_load_id: string | null }>) ?? []
-    const timeEntries = (j.fab_time_entries as Array<{ hours: number }>) ?? []
-    const packages = (j.fab_contractor_packages as Array<{ id: string; status: string; package_type: string; expected_return_date: string | null }>) ?? []
-    const tonnage = tonnageSummary(marks)
-    const action = jobActionSummary(marks, packages, new Date().toISOString().slice(0, 10))
-    return {
-      ...j,
-      fab_tasks: undefined,
-      fab_marks: undefined,
-      fab_time_entries: undefined,
-      fab_contractor_packages: undefined,
-      task_count: tasks.length,
-      task_done: tasks.filter(t => t.status === 'done').length,
-      mark_count: marks.length,
-      mark_done: marks.filter(m => m.status === 'done' || m.status === 'qc_passed').length,
-      total_hours: timeEntries.reduce((s, e) => s + (e.hours ?? 0), 0),
-      has_active_packages: packages.some(p => p.status === 'sent' || p.status === 'in_progress'),
-      // Tonnage-weighted progress (weight × qty; "made" = done|qc_passed).
-      total_kg: tonnage.total_kg,
-      made_kg: tonnage.made_kg,
-      tonnage_pct: tonnage.pct,
-      marks_missing_weight: tonnage.missing_weight,
-      // Action Centre rollups (cross-job "what needs me").
-      qc_waiting: action.qc_waiting,
-      dispatch_ready: action.dispatch_ready,
-      packages_out: action.packages_out,
-      packages_overdue: action.packages_overdue,
-    }
-  })
+  // Summarise nested arrays into counts (lib/fab-job-summary.ts — shared with GET /api/fab/jobs/[id]).
+  const today = new Date().toISOString().slice(0, 10)
+  const jobs = (data ?? []).map((j: Record<string, unknown>) => summariseFabJob(j, today))
 
   return NextResponse.json({ jobs })
 }

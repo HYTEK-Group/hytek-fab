@@ -29,8 +29,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     .eq('fab_job_id', id)
     .order('created_at', { ascending: true })
 
-  const packages = []
-  for (const pkg of pkgs ?? []) {
+  // Each package's reads are independent of every other package's, so the
+  // packages are built together instead of one after another. Promise.all keeps
+  // the created_at order.
+  const packages = await Promise.all((pkgs ?? []).map(async pkg => {
     const [{ data: marks }, { data: photos }, { data: certs }, { data: grants }] = await Promise.all([
       admin.from('fab_marks').select('id').eq('contractor_package_id', pkg.id),
       admin.from('fab_proof_photos').select('fab_mark_id, stage').eq('fab_package_id', pkg.id),
@@ -71,7 +73,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       compliance_mode: job.compliance_mode as ComplianceMode,
     })
 
-    packages.push({
+    return {
       ...pkg,
       total_marks: totalMarks,
       marks_with_made_photo: madeMarks.size,
@@ -100,8 +102,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       drop_ship: pkg.delivery_mode === 'drop_ship'
         ? { can_release: verdict.ok, blockers: verdict.blockers }
         : null,
-    })
-  }
+    }
+  }))
 
   return NextResponse.json({ quote_number: job.quote_number, packages })
 }

@@ -15,11 +15,20 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const { id } = await params
   const admin = getSupabaseAdmin()
 
-  const { data: tasks, error } = await admin
-    .from('fab_tasks')
-    .select('*')
-    .eq('fab_job_id', id)
-    .order('created_at', { ascending: true })
+  // The tasks and the job's task-attributed time entries do not depend on each
+  // other (both key on the job id), so they are read together.
+  const [{ data: tasks, error }, { data: te }] = await Promise.all([
+    admin
+      .from('fab_tasks')
+      .select('*')
+      .eq('fab_job_id', id)
+      .order('created_at', { ascending: true }),
+    admin
+      .from('fab_time_entries')
+      .select('task_id, hours')
+      .eq('fab_job_id', id)
+      .not('task_id', 'is', null),
+  ])
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   const taskList = (tasks ?? []) as Array<Record<string, unknown>>
   const taskIds = taskList.map(t => t.id as string)
@@ -27,11 +36,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   // Actual hours per task (in-house time entries attributed to a task).
   const hoursByTask: Record<string, number> = {}
   if (taskIds.length) {
-    const { data: te } = await admin
-      .from('fab_time_entries')
-      .select('task_id, hours')
-      .eq('fab_job_id', id)
-      .not('task_id', 'is', null)
     for (const e of (te ?? []) as Array<{ task_id: string; hours: number }>) {
       hoursByTask[e.task_id] = (hoursByTask[e.task_id] ?? 0) + (e.hours ?? 0)
     }
