@@ -278,5 +278,18 @@ that says so, so `select name, note from schema_migrations where note like
 'GitHub Actions down%'` lists them. Re-run the workflow afterwards — the ledger
 makes it a no-op.
 
+## One login across the apps (21/10/2026, D232)
+
+The browser login can live in ONE cookie for `hytekframing.com.au`, shared by
+the Hub, Detailing (with Dispatch), Install, Fab and Purchasing, so logging into
+one logs you into all five. Code: `shared-login.ts` (an identical copy in each of
+the five apps, with its tests). Switch: `NEXT_PUBLIC_SHARED_LOGIN_DOMAIN=hytekframing.com.au`
+on the Vercel project, then redeploy; it only acts on pages served from that
+domain, so `vercel.app`, staging, previews and localhost keep this app's own
+login. Off = remove the variable and redeploy. The cookie is in the exact
+`@supabase/ssr` format Purchasing already used; only the client's `storage`
+changes, never flow type or refresh. Signing out of one app signs out of all
+five. Invoicing and LWS have their own user databases and stay separate.
+
 
 Last checked: 17/09/2026 (front matter against the code by `npm run test:architecture`; the prose re-read against the files it names — the role key is live, and Sentry is wired).
