@@ -161,6 +161,35 @@ export type QueueDecision =
   /** Not fab's release. LWS's stream is answered 200, not refused. */
   | { action: 'ignored'; reason: string }
 
+/** Purchasing's cost code for Structural Steel (hytek-purchasing lib/cost-codes.ts). */
+export const STRUCTURAL_STEEL_COST_CODE = '0200'
+
+/**
+ * The cost code of the PO that arrived. The Hub's outbox payload carries the
+ * original door message under `event` (hytek-hub app/api/flow/event/route.ts:
+ * `event: norm.event`), whose `payload.cost_code` is what Purchasing sent. A
+ * top-level `cost_code` is read too, in case the Hub ever flattens it.
+ */
+export function materialsCostCode(p: Record<string, unknown>): string | null {
+  const top = str(p.cost_code)
+  if (top) return top
+  const ev = p.event
+  if (ev && typeof ev === 'object' && !Array.isArray(ev)) {
+    const inner = (ev as Record<string, unknown>).payload
+    if (inner && typeof inner === 'object' && !Array.isArray(inner)) {
+      return str((inner as Record<string, unknown>).cost_code)
+    }
+  }
+  return null
+}
+
+/** True for 0200 and its sub-codes ("0200-2", "0200.1"), never for 2000 or 0020. */
+export function isStructuralSteel(code: string | null): boolean {
+  if (!code) return false
+  const c = code.trim()
+  return c === STRUCTURAL_STEEL_COST_CODE || /^0200[-.\s]/.test(c)
+}
+
 /**
  * What this event does to the queue row, given the row that is already there.
  * PURE, and it is the whole of the interesting logic.
@@ -207,7 +236,19 @@ export function decideQueue(env: FabEnvelope, existing: ReadyQueueRow | null): Q
           ss_released_by: str(p.released_by) ?? str(p.actor),
         },
       }
-    case 'materials.received':
+    case 'materials.received': {
+      // ONLY STRUCTURAL STEEL TICKS "STEEL ON SITE" (Scott, 19/11/2026: "Yes,
+      // 0200 only"). Purchasing tells the Hub `materials_received` for EVERY PO
+      // when Steve marks it Work Complete (hytek-purchasing #86): fixings,
+      // plates, purlins, galvanising. Before this, any of them set the flag, and
+      // the flag is half of `ready`, which switches on Start fabrication. So a
+      // Builders Pack docket could offer a job whose beams had not arrived.
+      // No cost code at all is not steel either: a tick that claims the steel
+      // is in must be able to say which order brought it.
+      const code = materialsCostCode(p)
+      if (!isStructuralSteel(code)) {
+        return { action: 'ignored', reason: `not structural steel: cost code ${code ?? 'none'}` }
+      }
       return {
         action: 'upsert',
         patch: {
@@ -216,6 +257,7 @@ export function decideQueue(env: FabEnvelope, existing: ReadyQueueRow | null): Q
           materials_received_at: str(p.received_at) ?? env.occurred_at,
         },
       }
+    }
     case 'job.revised':
       // Identity only. A revision never grants or revokes a release: those are
       // deliberate acts with their own verbs, and inferring one from a rename is

@@ -138,7 +138,11 @@ exemptions:
 5. **How it gets a job.** The Hub's outbox pushes `job.released` (stream `SS`)
    and `materials.received` into `POST /api/fab/ingest`, guarded by
    `x-fab-import-secret` (`FAB_IMPORT_SECRET`, constant-time, fail closed), and
-   fab keeps the answer in its own `fab_ready_queue`. `GET /api/fab/ready-queue`
+   fab keeps the answer in its own `fab_ready_queue`. **Only a Structural Steel (0200)
+   arrival ticks "steel on site"** (Scott, 19/11/2026): Purchasing sends
+   `materials_received` for every PO marked Work Complete, so `decideQueue`
+   reads the PO's cost code (`materialsCostCode`) and ignores any other code, or
+   none. The tick is half of `ready`, which switches on Start fabrication. `GET /api/fab/ready-queue`
    then reads that table and joins `jobs` for names — **zero Hub calls**. It used
    to make up to FIFTY sequential `GET /api/flow/job-state` calls per page load,
    per supervisor. `READY_QUEUE_SOURCE=hub-poll` puts the old path back for one

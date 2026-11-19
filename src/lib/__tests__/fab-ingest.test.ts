@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest'
 import {
   decideQueue,
   decideTask,
+  isStructuralSteel,
+  materialsCostCode,
   isQueueEvent,
   normaliseFabEnvelope,
   parseAffectsDepts,
@@ -140,13 +142,38 @@ describe('decideQueue', () => {
     expect(d.action).toBe('upsert')
   })
 
-  it('materials.received sets the flag and its own timestamp', () => {
-    const d = decideQueue(
-      env({ event: 'materials.received', payload: { received_at: '2026-09-06T01:00:00.000Z' } }),
-      null,
-    )
+  // The shape the Hub's outbox really posts for materials.received: the job
+  // facts, received_at, and the original door message under `event`.
+  const received = (costCode: string | undefined) => ({
+    received_at: '2026-09-06T01:00:00.000Z',
+    event: { event: 'materials_received', quoteNumber: '26079902', payload: costCode === undefined ? {} : { po_ref: 'PO-1', cost_code: costCode } },
+  })
+
+  it('a Structural Steel (0200) arrival sets the flag and its own timestamp', () => {
+    const d = decideQueue(env({ event: 'materials.received', payload: received('0200') }), null)
     if (d.action !== 'upsert') throw new Error('expected upsert')
     expect(d.patch).toMatchObject({ materials_received: true, materials_received_at: '2026-09-06T01:00:00.000Z' })
+  })
+
+  it.each(['0400', '0300', '0600', '1500', '0500'])(
+    'a %s arrival is IGNORED — only structural steel ticks "steel on site"',
+    (code) => {
+      const d = decideQueue(env({ event: 'materials.received', payload: received(code) }), null)
+      expect(d).toEqual({ action: 'ignored', reason: `not structural steel: cost code ${code}` })
+    },
+  )
+
+  it('an arrival with no cost code is IGNORED — it cannot say it was the steel', () => {
+    const d = decideQueue(env({ event: 'materials.received', payload: received(undefined) }), null)
+    expect(d).toEqual({ action: 'ignored', reason: 'not structural steel: cost code none' })
+  })
+
+  it('a fixings arrival never clears a steel tick already there', () => {
+    const d = decideQueue(
+      env({ event: 'materials.received', payload: received('0400') }),
+      row({ materials_received: true, materials_received_at: '2026-09-01T00:00:00.000Z' }),
+    )
+    expect(d.action).toBe('ignored')
   })
 
   it('an event older than the stored one is STALE — a retry never undoes a newer fact', () => {
@@ -289,5 +316,24 @@ describe('decideTask — the rows the Hub writes today, written by their owner',
     expect(decideTask(env({ event: 'rework.resolved', payload: {} }), null).action).toBe('ignored')
     expect(decideTask(env({ event: 'variation.status_changed', payload: { status: 'invoiced' } }), null).action).toBe('ignored')
     expect(decideTask(env({ event: 'rework.raised', payload: { affects_depts: 'fabrication' } }), 'f1').action).toBe('ignored')
+  })
+})
+
+describe('isStructuralSteel / materialsCostCode', () => {
+  it('0200 and its sub-codes are steel; look-alikes are not', () => {
+    expect(isStructuralSteel('0200')).toBe(true)
+    expect(isStructuralSteel(' 0200 ')).toBe(true)
+    expect(isStructuralSteel('0200-2')).toBe(true)
+    expect(isStructuralSteel('2000')).toBe(false)
+    expect(isStructuralSteel('02000')).toBe(false)
+    expect(isStructuralSteel('0020')).toBe(false)
+    expect(isStructuralSteel(null)).toBe(false)
+  })
+
+  it('reads the code from the nested door message, or a flat one', () => {
+    expect(materialsCostCode({ event: { payload: { cost_code: '0200' } } })).toBe('0200')
+    expect(materialsCostCode({ cost_code: '0400' })).toBe('0400')
+    expect(materialsCostCode({ event: 'x' })).toBe(null)
+    expect(materialsCostCode({})).toBe(null)
   })
 })
