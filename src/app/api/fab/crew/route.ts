@@ -23,20 +23,21 @@ export async function GET(req: NextRequest) {
   const jobIds = (activeJobs ?? []).map((j: { id: string }) => j.id)
   if (jobIds.length === 0) return NextResponse.json({ crew: [] })
 
-  // Tasks assigned to workers across active jobs
-  const { data: tasks } = await admin
-    .from('fab_tasks')
-    .select('id, fab_job_id, description, assigned_to, status')
-    .in('fab_job_id', jobIds)
-    .neq('status', 'done')
-    .not('assigned_to', 'is', null)
-
-  // Time logged today per worker
-  const { data: timeToday } = await admin
-    .from('fab_time_entries')
-    .select('fab_job_id, worker_name, hours')
-    .in('fab_job_id', jobIds)
-    .eq('work_date', today)
+  // Two independent reads, run together:
+  // tasks assigned to workers across active jobs, and time logged today per worker.
+  const [{ data: tasks }, { data: timeToday }] = await Promise.all([
+    admin
+      .from('fab_tasks')
+      .select('id, fab_job_id, description, assigned_to, status')
+      .in('fab_job_id', jobIds)
+      .neq('status', 'done')
+      .not('assigned_to', 'is', null),
+    admin
+      .from('fab_time_entries')
+      .select('fab_job_id, worker_name, hours')
+      .in('fab_job_id', jobIds)
+      .eq('work_date', today),
+  ])
 
   // Build crew map: worker → { tasks, hours_today, current_job }
   const crewMap = new Map<string, {
